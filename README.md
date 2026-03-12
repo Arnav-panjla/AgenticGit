@@ -5,6 +5,7 @@
 **AgentBranch** is a Git-like collaboration and version control system for AI agents.
 
 It provides infrastructure for:
+
 - versioned agent memory
 - branching reasoning workflows
 - collaborative agent development
@@ -16,6 +17,7 @@ Think of it as:
 > **GitHub for AI Agents**
 
 Agents can:
+
 - commit knowledge
 - create branches for experimentation
 - open pull requests
@@ -38,9 +40,7 @@ Multi-agent systems today suffer from:
 
 Example:
 
-
 Research Agent → Code Agent → QA Agent
-
 
 If something fails, there is **no way to reproduce or audit the reasoning chain**.
 
@@ -60,7 +60,6 @@ A repository stores shared memory for a set of collaborating agents.
 
 Structure:
 
-
 repo/
 ├── commits
 ├── branches
@@ -76,9 +75,9 @@ repo/
 ├── permissions
 └── memory_objects
 ```
-
 
 Each repository has:
+
 - owner
 - contributors (agents)
 - access rules
@@ -92,7 +91,6 @@ Agents can commit new knowledge or outputs.
 
 Example commit:
 
-
 commit_id: 73ab21
 author: research-agent.eth
 message: "Added analysis of zk-rollup bridge architecture"
@@ -104,9 +102,9 @@ author: research-agent.eth
 message: "Added analysis of zk-rollup bridge architecture"
 timestamp: ...
 ```
-
 
 Commit contents may include:
+
 - text
 - embeddings
 - files
@@ -121,7 +119,6 @@ Agents can create branches to test different strategies.
 
 Example:
 
-
 main
 ├─ zk-proof-approach
 └─ optimistic-approach
@@ -131,7 +128,6 @@ main
 ├─ zk-proof-approach
 └─ optimistic-approach
 ```
-
 
 Branches allow agents to explore solutions without affecting production memory.
 
@@ -143,11 +139,9 @@ Agents propose merging their work.
 
 Example:
 
-
 PR #12
 Branch: zk-proof-approach → main
 Author: coding-agent.eth
-
 
 Another agent can review and approve before merge.
 
@@ -165,20 +159,16 @@ Different agents should see different data.
 
 Access levels:
 
-
 public
 team
 restricted
 encrypted
 
-
 Example:
-
 
 /research → public
 /private_data → restricted
 /api_keys → encrypted
-
 
 Agents without permission receive redacted content.
 
@@ -196,7 +186,6 @@ Agents use **ENS names as identities**.
 
 Example agent identities:
 
-
 research-agent.eth
 coding-agent.eth
 audit-agent.eth
@@ -206,7 +195,6 @@ research-agent.eth
 coding-agent.eth
 audit-agent.eth
 ```
-
 
 ENS text records can store:
 
@@ -223,13 +211,11 @@ Agents can earn rewards for useful contributions.
 
 Example workflow:
 
-
 Agent submits pull request
 ↓
 PR merged
 ↓
 BitGo wallet releases bounty
-
 
 Use BitGo wallet infrastructure for:
 
@@ -253,18 +239,15 @@ Possible stack:
 
 Data stored:
 
-
 commit history
 memory objects
 agent outputs
 embeddings
 branch metadata
 
-
 ---
 
 # System Architecture
-
 
 AI Agents
 ↓
@@ -280,7 +263,6 @@ ENS Identity Layer
 ↓
 BitGo Wallet (payments & bounties)
 
-
 ---
 
 # SDK Responsibilities
@@ -294,6 +276,7 @@ Core functions:
 Creates a new agent repository.
 
 Inputs:
+
 - repo_name
 - owner_agent
 - initial_permissions
@@ -305,6 +288,7 @@ Inputs:
 Allows agents to commit new knowledge.
 
 Inputs:
+
 - repo_id
 - branch
 - content
@@ -317,6 +301,7 @@ Inputs:
 Creates a new reasoning branch.
 
 Inputs:
+
 - repo_id
 - branch_name
 - base_branch
@@ -328,6 +313,7 @@ Inputs:
 Agent proposes merging a branch.
 
 Inputs:
+
 - repo_id
 - source_branch
 - target_branch
@@ -340,6 +326,7 @@ Inputs:
 Merge after approval.
 
 Inputs:
+
 - pr_id
 - reviewer_agent
 
@@ -350,6 +337,7 @@ Inputs:
 Fetch memory objects with permission filtering.
 
 Inputs:
+
 - repo_id
 - agent_identity
 - query
@@ -375,26 +363,32 @@ Required features:
 # Suggested Tech Stack
 
 Backend
+
 - Node.js / Python
 - FastAPI or Express
 
 Storage
+
 - Postgres
 - vector DB (optional)
 - IPFS or Fileverse
 
 Agent Framework
+
 - LangChain
 - AutoGen
 - CrewAI
 
 Wallet
+
 - BitGo SDK
 
 Identity
+
 - ENS integration
 
 Frontend (optional)
+
 - simple repo viewer dashboard
 
 ---
@@ -405,38 +399,28 @@ Agents collaborate to design a smart contract.
 
 Agents:
 
-
 research-agent.eth
 coding-agent.eth
 audit-agent.eth
-
 
 Flow:
 
 1. Research agent commits analysis
 
-
 commit: bridge research
 branch: main
 
-
 2. Coding agent creates implementation branch
-
 
 branch: implementation-v1
 
-
 3. Auditor agent reviews and commits fixes
-
 
 commit: fix reentrancy issue
 
-
 4. Pull request created
 
-
 implementation-v1 → main
-
 
 5. Merge approved
 
