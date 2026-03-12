@@ -41,7 +41,7 @@ function timeAgo(dateStr: string) {
 
 export default function PullRequests() {
   const { id } = useParams<{ id: string }>();
-  const [prs, setPRs] = useState<PR[]>([]);
+  const [allPRs, setAllPRs] = useState<PR[]>([]);
   const [filter, setFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [repoName, setRepoName] = useState('');
@@ -52,17 +52,21 @@ export default function PullRequests() {
       .then((r) => setRepoName(r.name))
       .catch(console.error);
 
-    const statusParam = filter ? `?status=${filter}` : '';
-    api.get<PR[]>(`/repositories/${id}/pulls${statusParam}`)
-      .then(setPRs)
+    // Always fetch all PRs for accurate counts
+    api.get<PR[]>(`/repositories/${id}/pulls`)
+      .then(setAllPRs)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id, filter]);
+  }, [id]);
 
-  const counts = prs.reduce(
+  // Compute counts from full list (not filtered)
+  const counts = allPRs.reduce(
     (acc, pr) => { acc[pr.status] = (acc[pr.status] ?? 0) + 1; return acc; },
     {} as Record<string, number>
   );
+
+  // Filter for display
+  const prs = filter ? allPRs.filter(pr => pr.status === filter) : allPRs;
 
   return (
     <div>

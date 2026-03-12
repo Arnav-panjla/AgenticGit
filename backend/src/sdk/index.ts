@@ -245,13 +245,23 @@ export async function readMemory(
   );
 
   // Resolve content from Fileverse and apply permission filtering
-  const levelOrder = { public: 0, team: 1, restricted: 2, encrypted: 3 };
+  const levelOrder: Record<PermissionLevel, number> = { public: 0, team: 1, restricted: 2, encrypted: 3 };
 
   for (const commit of commits) {
     const agentLevel = levelOrder[permLevel];
-    const contentAllowed = isOwner || agentLevel >= 0; // public is always readable
+    
+    // Permission logic:
+    // - Owners can see everything
+    // - 'public' commits are readable by everyone
+    // - 'team' commits require team level or higher
+    // - 'restricted' commits require restricted level or higher
+    // - 'encrypted' commits require encrypted level (or owner)
+    const commitLevel = levelOrder['public']; // All commits are public visibility by default
+    const contentAllowed = isOwner || agentLevel >= commitLevel;
 
-    if (permLevel === 'encrypted' && !isOwner) {
+    if (!contentAllowed) {
+      commit.content = '[REDACTED — insufficient permissions]';
+    } else if (permLevel === 'encrypted' && !isOwner) {
       commit.content = '[REDACTED — encrypted content]';
     } else {
       commit.content = (await retrieveContent(commit.content_ref)) ?? '[content not found]';
@@ -287,9 +297,9 @@ export async function openPullRequest(
   if (!target) throw new Error(`Branch "${targetBranchName}" not found`);
 
   const [pr] = await query<PullRequest>(
-    `INSERT INTO pull_requests (repo_id, source_branch_id, target_branch_id, author_agent_id, description)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [repoId, source.id, target.id, author.id, description]
+    `INSERT INTO pull_requests (repo_id, source_branch_id, target_branch_id, author_agent_id, description, bounty_amount)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [repoId, source.id, target.id, author.id, description, bountyAmount]
   );
 
   // Escrow bounty if provided
@@ -322,6 +332,12 @@ export async function mergePullRequest(
   if (pr.bounty_amount > 0) {
     await bountyService.release(pr.repo_id, pr.author_agent_id, pr.bounty_amount, prId);
   }
+
+  // Bump reviewer reputation for completing a review
+  await query(
+    `UPDATE agents SET reputation_score = reputation_score + 5 WHERE id = $1`,
+    [reviewer.id]
+  );
 
   return merged;
 }

@@ -28,6 +28,12 @@ interface Repo {
   bounty_pool: number;
 }
 
+// Get the current agent ENS from localStorage or use a default
+function getCurrentAgentEns(): string {
+  // In v2, this will come from AuthContext; for now, check localStorage
+  return localStorage.getItem('agentbranch_agent_ens') || 'viewer.eth';
+}
+
 function shortId(id: string) {
   return id.slice(0, 7);
 }
@@ -66,7 +72,8 @@ export default function Repository() {
   useEffect(() => {
     if (!id) return;
     const branchParam = selectedBranch ? `&branch=${selectedBranch}` : '';
-    api.get<Commit[]>(`/repositories/${id}/commits?agent_ens=research-agent.eth${branchParam}`)
+    const agentEns = getCurrentAgentEns();
+    api.get<Commit[]>(`/repositories/${id}/commits?agent_ens=${encodeURIComponent(agentEns)}${branchParam}`)
       .then(setCommits)
       .catch(console.error);
   }, [id, selectedBranch]);

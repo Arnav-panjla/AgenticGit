@@ -11,6 +11,7 @@ interface Repo {
   branch_count: number;
   commit_count: number;
   created_at: string;
+  default_permission?: string;
 }
 
 function Badge({ children, color }: { children: React.ReactNode; color: string }) {
@@ -65,7 +66,12 @@ export default function Home() {
                   <span className="text-sky-400 font-semibold text-lg group-hover:text-sky-300 truncate">
                     {repo.name}
                   </span>
-                  <Badge color="bg-slate-700 text-slate-300">public</Badge>
+                  <Badge color={
+                    repo.default_permission === 'encrypted' ? 'bg-red-900/50 text-red-300' :
+                    repo.default_permission === 'restricted' ? 'bg-amber-900/50 text-amber-300' :
+                    repo.default_permission === 'team' ? 'bg-blue-900/50 text-blue-300' :
+                    'bg-slate-700 text-slate-300'
+                  }>{repo.default_permission || 'public'}</Badge>
                 </div>
                 {repo.description && (
                   <p className="text-slate-400 text-sm mb-3 truncate">{repo.description}</p>
