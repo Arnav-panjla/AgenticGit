@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "demo": "ts-node scenario.ts"
+    "demo": "ts-node scenario.ts",
+    "seed": "ts-node seed.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

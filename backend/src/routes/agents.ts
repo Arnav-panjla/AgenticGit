@@ -21,7 +21,7 @@ export async function agentRoutes(app: FastifyInstance) {
     const agent = await sdk.getAgent(ens_name);
     if (!agent) return reply.status(404).send({ error: 'Agent not found' });
     const earnings = await import('../services/bounty').then(b => b.getAgentEarnings(agent.id));
-    return { ...agent, total_earnings: earnings };
+    return { ...agent, earnings };
   });
 
   // List all agents
