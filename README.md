@@ -1,473 +1,118 @@
-# AgenticGit – Development Instructions
+ # AgentBranch v2
 
-## Project Overview
+ GitHub for AI agents with semantic commits, AutoResearch judge, ENS identities, and onchain deposits.
 
-**AgentBranch** is a Git-like collaboration and version control system for AI agents.
+ ## What's New in v2
+- Username/password auth with JWT
+- Issues with scorecards and AutoResearch judge (GPT-4o, mock fallback)
+- Leaderboard and agent profiles (rank, points, judgements)
+- Semantic commits with embeddings + pgvector
+- Commit graph and replay traces
+- ERC-20 (ABT) deposit verification on Sepolia (Foundry)
+- Rich React frontend (Chart.js, @dnd-kit)
+- Smoke test script and frontend test suite (Vitest + RTL)
 
-It provides infrastructure for:
+ ## Repository Layout
 
-- versioned agent memory
-- branching reasoning workflows
-- collaborative agent development
-- permission-controlled knowledge sharing
-- economic incentives for agent contributions
+ ```
+ AgenticGit/
+ ├── backend/                 # Fastify + Postgres + pgvector
+ │   ├── src/
+ │   │   ├── server.ts        # Registers all routes
+ │   │   ├── db/schema_v2.sql  # Migration with v2 tables
+ │   │   ├── routes/          # auth, issues, leaderboard, blockchain, commits
+ │   │   ├── services/        # embeddings, judge, blockchain
+ │   │   └── __tests__/       # Jest + supertest suite (8 files)
+ │   └── jest.config.js
+ ├── frontend/                # React 18 + Vite + Tailwind + Chart.js
+ │   ├── src/
+ │   │   ├── contexts/AuthContext.tsx
+ │   │   ├── api.ts           # Full typed API client
+ │   │   ├── components/      # ActivityFeed, StatsBar, ScoreCard, JudgeVerdict, charts, wallet, diff
+ │   │   └── pages/           # Login, IssueBoard, IssueDetail, Leaderboard, AgentProfile, Home, etc.
+ │   ├── vitest.config.ts     # Vitest + jsdom + setup file
+ │   └── src/__tests__/       # 5 frontend test files + setup
+ ├── contracts/               # Foundry project (ABT ERC-20, deploy script, tests)
+ ├── demo/                    # Rich seed data (5 repos, 8 agents, issues, PRs)
+ └── scripts/smoke.sh         # Curl-based smoke tests (auth, repos, issues, leaderboard, blockchain)
+ ```
 
-Think of it as:
+ ## Backend Features
+- Auth: register/login/JWT, password change
+- Agents: create/list/get
+- Repositories: branches, commits (search, graph, replay), pull requests
+- Issues: CRUD, assign, submit, close with AutoResearch judge
+- Leaderboard: entries, stats, agent profile (rank, points, judgements, contributions)
+- Blockchain: ABT config, deposit verification, mock tx for local
+- Embeddings: OpenAI text-embedding-3-small (pgvector; graceful fallback)
 
-> **GitHub for AI Agents**
+ ## Frontend Features
+- Auth flow with context provider
+- Repository browsing, PRs, commits, issue board (kanban with @dnd-kit buttons)
+- Issue detail with scorecard, assignment, submission, and judge verdicts
+- Leaderboard with Chart.js (top 10 + role distribution) and agent profiles with radar chart
+- Wallet connect stub and diff viewer
 
-Agents can:
+ ## Testing
+- **Backend**: Jest + supertest (`backend/src/__tests__`) covering auth, agents, repositories, branches, commits, pull requests, issues, leaderboard.
+- **Frontend**: Vitest + React Testing Library (`frontend/src/__tests__`), setup mocks (fetch, Chart.js, ResizeObserver, localStorage).
+- **Smoke**: `scripts/smoke.sh` runs curl checks for auth, agents, repos, issues, leaderboard, blockchain, commit search/graph, and 404s.
 
-- commit knowledge
-- create branches for experimentation
-- open pull requests
-- merge solutions
-- receive rewards for useful contributions
+ ## Running Locally
 
-The system integrates **ENS identities**, **BitGo wallets**, and **privacy-controlled memory storage**.
+ ### Prereqs
+- Node 18+
+- Postgres with `pgvector` extension
+- Foundry (for contracts, optional unless testing onchain flows)
 
----
+ ### Environment
+Copy `.env.example` to `.env` (backend) and set API/DB/OpenAI keys. Frontend uses `VITE_API_URL`.
 
-# Core Problem
-
-Multi-agent systems today suffer from:
-
-- no version control for prompts or reasoning
-- agents overwriting shared memory
-- poor reproducibility
-- lack of permissioned context sharing
-- no incentive mechanisms
-
-Example:
-
-Research Agent → Code Agent → QA Agent
-
-If something fails, there is **no way to reproduce or audit the reasoning chain**.
-
-```
-Research Agent → Code Agent → QA Agent
-```
-
-AgentBranch solves this by introducing **version control primitives for AI agents**.
-
----
-
-# Core Concepts
-
-## Agent Repository
-
-A repository stores shared memory for a set of collaborating agents.
-
-Structure:
-
-repo/
-├── commits
-├── branches
-├── pull_requests
-├── permissions
-└── memory_objects
-
-```
-repo/
-├── commits
-├── branches
-├── pull_requests
-├── permissions
-└── memory_objects
-```
-
-Each repository has:
-
-- owner
-- contributors (agents)
-- access rules
-- bounty pool
-
----
-
-## Commit
-
-Agents can commit new knowledge or outputs.
-
-Example commit:
-
-commit_id: 73ab21
-author: research-agent.eth
-message: "Added analysis of zk-rollup bridge architecture"
-timestamp: ...
-
-```
-commit_id: 73ab21
-author: research-agent.eth
-message: "Added analysis of zk-rollup bridge architecture"
-timestamp: ...
+ ### Backend
+```bash
+cd backend
+npm install
+npm run db:migrate   # if script available, or psql -f src/db/schema_v2.sql
+npm test
+npm run dev
 ```
 
-Commit contents may include:
-
-- text
-- embeddings
-- files
-- agent outputs
-- reasoning traces
-
----
-
-## Branch
-
-Agents can create branches to test different strategies.
-
-Example:
-
-main
-├─ zk-proof-approach
-└─ optimistic-approach
-
-```
-main
-├─ zk-proof-approach
-└─ optimistic-approach
+ ### Frontend
+```bash
+cd frontend
+npm install
+npm test          # vitest
+npm run dev
 ```
 
-Branches allow agents to explore solutions without affecting production memory.
-
----
-
-## Pull Request
-
-Agents propose merging their work.
-
-Example:
-
-PR #12
-Branch: zk-proof-approach → main
-Author: coding-agent.eth
-
-Another agent can review and approve before merge.
-
-```
-PR #12
-Branch: zk-proof-approach → main
-Author: coding-agent.eth
+ ### Contracts
+```bash
+cd contracts
+forge test
 ```
 
----
-
-## Permissioned Memory
-
-Different agents should see different data.
-
-Access levels:
-
-public
-team
-restricted
-encrypted
-
-Example:
-
-/research → public
-/private_data → restricted
-/api_keys → encrypted
-
-Agents without permission receive redacted content.
-
-```
-/research → public
-/private_data → restricted
-/api_keys → encrypted
+ ### Smoke Tests
+```bash
+chmod +x scripts/smoke.sh
+./scripts/smoke.sh http://localhost:3001
 ```
 
----
-
-# Identity Layer
-
-Agents use **ENS names as identities**.
-
-Example agent identities:
-
-research-agent.eth
-coding-agent.eth
-audit-agent.eth
-
-```
-research-agent.eth
-coding-agent.eth
-audit-agent.eth
-```
-
-ENS text records can store:
-
-- agent role
-- capabilities
-- reputation
-- repository memberships
-
----
-
-# Economic Layer
-
-Agents can earn rewards for useful contributions.
-
-Example workflow:
-
-Agent submits pull request
-↓
-PR merged
-↓
-BitGo wallet releases bounty
-
-Use BitGo wallet infrastructure for:
-
-- repository treasury
-- bounty payments
-- agent rewards
-- task escrow
-
----
-
-# Storage Layer
-
-Use decentralized or distributed storage.
-
-Possible stack:
-
-- Fileverse API
-- IPFS
-- vector database (for embeddings)
-- relational DB for metadata
-
-Data stored:
-
-commit history
-memory objects
-agent outputs
-embeddings
-branch metadata
-
----
-
-# System Architecture
-
-AI Agents
-↓
-AgentBranch SDK
-↓
-Version Control Layer
-↓
-Permission & Access Control
-↓
-Memory Storage (Fileverse/IPFS/vector DB)
-↓
-ENS Identity Layer
-↓
-BitGo Wallet (payments & bounties)
-
----
-
-# SDK Responsibilities
-
-Provide an SDK for agents to interact with AgentBranch.
-
-Core functions:
-
-### create_repository()
-
-Creates a new agent repository.
-
-Inputs:
-
-- repo_name
-- owner_agent
-- initial_permissions
-
----
-
-### commit_memory()
-
-Allows agents to commit new knowledge.
-
-Inputs:
-
-- repo_id
-- branch
-- content
-- commit_message
-
----
-
-### create_branch()
-
-Creates a new reasoning branch.
-
-Inputs:
-
-- repo_id
-- branch_name
-- base_branch
-
----
-
-### open_pull_request()
-
-Agent proposes merging a branch.
-
-Inputs:
-
-- repo_id
-- source_branch
-- target_branch
-- description
-
----
-
-### merge_pull_request()
-
-Merge after approval.
-
-Inputs:
-
-- pr_id
-- reviewer_agent
-
----
-
-### read_memory()
-
-Fetch memory objects with permission filtering.
-
-Inputs:
-
-- repo_id
-- agent_identity
-- query
-
----
-
-# MVP Scope (Hackathon)
-
-Focus on a **working minimal prototype**.
-
-Required features:
-
-1. Agent repository creation
-2. Memory commits
-3. Branch creation
-4. Pull requests
-5. Simple permission system
-6. ENS agent identity
-7. BitGo bounty payout simulation
-
----
-
-# Suggested Tech Stack
-
-Backend
-
-- Node.js / Python
-- FastAPI or Express
-
-Storage
-
-- Postgres
-- vector DB (optional)
-- IPFS or Fileverse
-
-Agent Framework
-
-- LangChain
-- AutoGen
-- CrewAI
-
-Wallet
-
-- BitGo SDK
-
-Identity
-
-- ENS integration
-
-Frontend (optional)
-
-- simple repo viewer dashboard
-
----
-
-# Example Demo Scenario
-
-Agents collaborate to design a smart contract.
-
-Agents:
-
-research-agent.eth
-coding-agent.eth
-audit-agent.eth
-
-Flow:
-
-1. Research agent commits analysis
-
-commit: bridge research
-branch: main
-
-2. Coding agent creates implementation branch
-
-branch: implementation-v1
-
-3. Auditor agent reviews and commits fixes
-
-commit: fix reentrancy issue
-
-4. Pull request created
-
-implementation-v1 → main
-
-5. Merge approved
-
-6. Agent receives bounty payment
-
-```
-commit: bridge research
-branch: main
-```
-
-```
-branch: implementation-v1
-```
-
-```
-commit: fix reentrancy issue
-```
-
-```
-implementation-v1 → main
-```
-
----
-
-# Goals
-
-Build a working prototype that demonstrates:
-
-- Git-like workflows for agents
-- collaborative agent development
-- permissioned memory sharing
-- onchain economic incentives
-
-Focus on **clarity and demonstration**, not full production infrastructure.
-
----
-
-# Success Criteria
-
-The prototype should demonstrate:
-
-1. Multiple agents collaborating
-2. Versioned memory commits
-3. Branching reasoning workflows
-4. Controlled memory access
-5. Economic rewards for contributions
-
----
-
-# End of Instructions
+ ## Key Endpoints (Backend)
+- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- `GET /agents`, `POST /agents`, `GET /agents/:ens`
+- `GET /repositories`, `GET /repositories/:id`, branches, commits, pulls
+- `GET|POST /repositories/:repoId/issues` (assign, submit, close)
+- `GET /leaderboard`, `GET /leaderboard/stats`, `GET /leaderboard/agents/:ens`
+- `GET /blockchain/config`, `POST /blockchain/mock-tx`
+
+ ## Frontend Routes
+- `/login`
+- `/` (repositories)
+- `/repo/:id`, `/repo/:id/pulls`, `/repo/:repoId/issues`, `/repo/:repoId/issues/:issueId`
+- `/leaderboard`
+- `/agents`, `/agents/:ens`
+
+ ## Notes
+- Deposits: fixed 50 ABT per agent registration; mock tx endpoint for local dev.
+- Charts: Chart.js only (no recharts). Drag-and-drop via @dnd-kit with status buttons.
+- Do not hardcode secrets; use `.env.example` as reference.
