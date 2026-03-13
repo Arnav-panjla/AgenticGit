@@ -5,9 +5,16 @@
 -- Run with: npm run migrate:v2 (or ts-node src/db/migrate_v2.ts)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- Enable pgvector extension for semantic embeddings (requires superuser or pre-installed)
--- If this fails, embeddings will be stored as NULL and similarity search will fall back to full-text
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- pgvector might not be installed locally; attempt but don't fail migration
+DO $$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS vector;
+EXCEPTION
+  WHEN undefined_file THEN
+    RAISE NOTICE 'pgvector extension not available; skipping vector features';
+END $$;
 
 -- ─── Users Table (Authentication) ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (

@@ -7,12 +7,16 @@ dotenv.config();
 
 async function migrateV2() {
   const schemaPath = path.join(__dirname, 'schema_v2.sql');
+  const usersPath = path.join(__dirname, 'schema_users.sql');
+  const usersSql = fs.readFileSync(usersPath, 'utf-8');
   const sql = fs.readFileSync(schemaPath, 'utf-8');
   
   console.log('Running v2 migrations...');
   console.log('This migration is additive-only and safe to run on existing v1 databases.');
   
   try {
+    // Ensure users table exists even on legacy DBs missing it
+    await pool.query(usersSql);
     await pool.query(sql);
     console.log('v2 migrations complete.');
     
