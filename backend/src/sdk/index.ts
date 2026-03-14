@@ -1,9 +1,10 @@
 /**
- * AgentBranch SDK v3
+ * AgentBranch SDK v5
  *
  * Core functions for AI agents to interact with the version control system.
  * v2 adds: semantic commits, reasoning graph, replay traces
  * v3 adds: knowledge context for multi-agent collaboration handoffs
+ * v5 adds: failure memory, workflow hooks, security scanning
  */
 
 import { query, queryOne } from '../db/client';
@@ -74,6 +75,26 @@ export interface KnowledgeContext {
   handoff_summary?: string;
 }
 
+/**
+ * Structured failure context for AI failure memory (v5).
+ * Tags commits with information about failed approaches so agents can learn
+ * from past mistakes and avoid repeating them.
+ */
+export interface FailureContext {
+  /** Whether this commit represents a failed approach */
+  failed: boolean;
+  /** Category of the error (e.g., "runtime", "logic", "dependency", "timeout") */
+  error_type?: string;
+  /** Human/agent-readable error description */
+  error_detail?: string;
+  /** What approach was tried and failed */
+  failed_approach?: string;
+  /** Root cause analysis (why it failed) */
+  root_cause?: string;
+  /** Severity: low = minor inconvenience, medium = blocks progress, high = critical failure */
+  severity?: 'low' | 'medium' | 'high';
+}
+
 export interface Commit {
   id: string;
   repo_id: string;
@@ -97,6 +118,8 @@ export interface Commit {
   trace_result?: string;
   // Knowledge handoff (v3)
   knowledge_context?: KnowledgeContext;
+  // Failure memory (v5)
+  failure_context?: FailureContext;
   // Populated by readMemory
   content?: string;
   author_ens?: string;
@@ -126,6 +149,8 @@ export interface CommitOptions {
   skipSemantics?: boolean;
   /** Structured knowledge handoff for the next agent */
   knowledgeContext?: KnowledgeContext;
+  /** Failure memory — tag this commit as a failed approach (v5) */
+  failureContext?: FailureContext;
 }
 
 export interface SearchResult {
@@ -238,7 +263,7 @@ export async function commitMemory(
   authorEns: string,
   options: CommitOptions = {}
 ): Promise<Commit> {
-  const { contentType = 'text', reasoningType, trace, skipSemantics = false, knowledgeContext } = options;
+  const { contentType = 'text', reasoningType, trace, skipSemantics = false, knowledgeContext, failureContext } = options;
 
   const author = await getAgent(authorEns);
   if (!author) throw new Error(`Agent not found: ${authorEns}`);
@@ -274,13 +299,14 @@ export async function commitMemory(
     }
   }
 
-  // Build insert query with all v2+v3 fields
+  // Build insert query with all v2+v3+v5 fields
   const [commit] = await query<Commit>(
     `INSERT INTO commits (
       repo_id, branch_id, author_agent_id, message, content_ref, content_type,
       parent_commit_id, embedding, semantic_summary, tags, reasoning_type,
-      trace_prompt, trace_context, trace_tools, trace_result, knowledge_context
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      trace_prompt, trace_context, trace_tools, trace_result, knowledge_context,
+      failure_context
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *`,
     [
       repoId,
@@ -299,6 +325,7 @@ export async function commitMemory(
       trace?.tools ? JSON.stringify(trace.tools) : null,
       trace?.result ?? null,
       knowledgeContext ? JSON.stringify(knowledgeContext) : null,
+      failureContext ? JSON.stringify(failureContext) : null,
     ]
   );
 
@@ -429,6 +456,51 @@ export async function searchCommits(
     commit: r,
     similarity: Math.min(1, r.rank / 10), // Normalize rank to 0-1
   }));
+}
+
+// ─── Failure Memory Search (v5) ───────────────────────────────────────────────
+
+/**
+ * Search for commits tagged with failure context.
+ * Helps agents learn from past failed approaches and avoid repeating them.
+ */
+export async function searchFailures(
+  repoId: string,
+  options: {
+    errorType?: string;
+    severity?: 'low' | 'medium' | 'high';
+    limit?: number;
+  } = {}
+): Promise<Commit[]> {
+  const { errorType, severity, limit = 20 } = options;
+
+  let whereClause = 'WHERE c.repo_id = $1 AND c.failure_context IS NOT NULL AND (c.failure_context->>\'failed\')::boolean = true';
+  const params: any[] = [repoId];
+
+  if (errorType) {
+    params.push(errorType);
+    whereClause += ` AND c.failure_context->>'error_type' = $${params.length}`;
+  }
+
+  if (severity) {
+    params.push(severity);
+    whereClause += ` AND c.failure_context->>'severity' = $${params.length}`;
+  }
+
+  params.push(limit);
+
+  const results = await query<Commit>(
+    `SELECT c.*, a.ens_name as author_ens, b.name as branch_name
+     FROM commits c
+     JOIN agents a ON c.author_agent_id = a.id
+     JOIN branches b ON c.branch_id = b.id
+     ${whereClause}
+     ORDER BY c.created_at DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return results;
 }
 
 // ─── Reasoning Graph (v2) ─────────────────────────────────────────────────────

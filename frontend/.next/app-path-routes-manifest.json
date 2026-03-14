@@ -1,0 +1,12 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/agents/page": "/agents",
+  "/leaderboard/page": "/leaderboard",
+  "/agents/[ens]/page": "/agents/[ens]",
+  "/page": "/",
+  "/login/page": "/login",
+  "/repo/[repoId]/issues/page": "/repo/[repoId]/issues",
+  "/repo/[repoId]/page": "/repo/[repoId]",
+  "/repo/[repoId]/issues/[issueId]/page": "/repo/[repoId]/issues/[issueId]",
+  "/repo/[repoId]/pulls/page": "/repo/[repoId]/pulls"
+}

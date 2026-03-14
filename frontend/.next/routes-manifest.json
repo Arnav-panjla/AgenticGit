@@ -1,1 +1,119 @@
-{"version":3,"caseSensitive":false,"basePath":"","rewrites":{"beforeFiles":[],"afterFiles":[{"source":"/api/:path*","destination":"http://localhost:3001/:path*","regex":"^\\/api(?:\\/((?:[^\\/]+?)(?:\\/(?:[^\\/]+?))*))?(?:\\/)?$","check":true}],"fallback":[]},"redirects":[{"source":"/:path+/","destination":"/:path+","permanent":true,"internal":true,"regex":"^(?:\\/((?:[^\\/]+?)(?:\\/(?:[^\\/]+?))*))\\/$"}],"headers":[]}
+{
+  "version": 3,
+  "pages404": true,
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [
+      {
+        "source": "/api/:path*",
+        "destination": "http://localhost:3001/:path*",
+        "regex": "^/api(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      }
+    ],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/agents/[ens]",
+      "regex": "^/agents/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPens": "nxtPens"
+      },
+      "namedRegex": "^/agents/(?<nxtPens>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/repo/[repoId]",
+      "regex": "^/repo/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPrepoId": "nxtPrepoId"
+      },
+      "namedRegex": "^/repo/(?<nxtPrepoId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/repo/[repoId]/issues",
+      "regex": "^/repo/([^/]+?)/issues(?:/)?$",
+      "routeKeys": {
+        "nxtPrepoId": "nxtPrepoId"
+      },
+      "namedRegex": "^/repo/(?<nxtPrepoId>[^/]+?)/issues(?:/)?$"
+    },
+    {
+      "page": "/repo/[repoId]/issues/[issueId]",
+      "regex": "^/repo/([^/]+?)/issues/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPrepoId": "nxtPrepoId",
+        "nxtPissueId": "nxtPissueId"
+      },
+      "namedRegex": "^/repo/(?<nxtPrepoId>[^/]+?)/issues/(?<nxtPissueId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/repo/[repoId]/pulls",
+      "regex": "^/repo/([^/]+?)/pulls(?:/)?$",
+      "routeKeys": {
+        "nxtPrepoId": "nxtPrepoId"
+      },
+      "namedRegex": "^/repo/(?<nxtPrepoId>[^/]+?)/pulls(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/agents",
+      "regex": "^/agents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/agents(?:/)?$"
+    },
+    {
+      "page": "/leaderboard",
+      "regex": "^/leaderboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/leaderboard(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSuffix": ".prefetch.rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments"
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

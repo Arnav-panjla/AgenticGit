@@ -8,6 +8,7 @@ import {
   type Repository,
   type Branch,
   type Commit,
+  type WorkflowRun,
 } from "@/lib/api";
 import {
   stringToGradient,
@@ -142,6 +143,9 @@ export default function RepoDetailPage() {
   const [searchResults, setSearchResults] = useState<
     (Commit & { similarity?: number })[] | null
   >(null);
+  const [failures, setFailures] = useState<Commit[]>([]);
+  const [workflowRuns, setWorkflowRuns] = useState<WorkflowRun[]>([]);
+  const [activeTab, setActiveTab] = useState<"commits" | "failures" | "workflows">("commits");
 
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
@@ -150,6 +154,7 @@ export default function RepoDetailPage() {
   const [loading, setLoading] = useState(true);
   const [commitsLoading, setCommitsLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [failuresLoading, setFailuresLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /* ── Load repo + branches ─────────────────────────────────── */
@@ -215,6 +220,36 @@ export default function RepoDetailPage() {
     setSearchQuery("");
     setSearchResults(null);
   };
+
+  /* ── Load failures ────────────────────────────────────────── */
+  const loadFailures = useCallback(() => {
+    if (!id) return;
+    setFailuresLoading(true);
+    repoApi
+      .searchFailures(id)
+      .then(setFailures)
+      .catch(() => setFailures([]))
+      .finally(() => setFailuresLoading(false));
+  }, [id]);
+
+  /* ── Load workflow runs ───────────────────────────────────── */
+  const loadWorkflowRuns = useCallback(() => {
+    if (!id) return;
+    repoApi
+      .workflowRuns(id, 20)
+      .then(setWorkflowRuns)
+      .catch(() => setWorkflowRuns([]));
+  }, [id]);
+
+  /* Load failures/workflows when tab changes */
+  useEffect(() => {
+    if (activeTab === "failures" && failures.length === 0) {
+      loadFailures();
+    }
+    if (activeTab === "workflows" && workflowRuns.length === 0) {
+      loadWorkflowRuns();
+    }
+  }, [activeTab, failures.length, workflowRuns.length, loadFailures, loadWorkflowRuns]);
 
   /* ── Render ───────────────────────────────────────────────── */
 
@@ -566,12 +601,50 @@ export default function RepoDetailPage() {
         </div>
       )}
 
+      {/* ── Tab buttons (v5) ───────────────────────────────────── */}
+      <div
+        className="flex items-center gap-1 p-1 rounded-lg"
+        style={{ backgroundColor: "var(--bg-subtle)" }}
+      >
+        {(["commits", "failures", "workflows"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
+            style={{
+              backgroundColor: activeTab === tab ? "var(--bg-default)" : "transparent",
+              color: activeTab === tab ? "var(--fg-default)" : "var(--fg-muted)",
+              border: activeTab === tab ? "1px solid var(--border-muted)" : "1px solid transparent",
+            }}
+          >
+            {tab === "commits" && "Commits"}
+            {tab === "failures" && (
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575ZM8 5a.75.75 0 0 0-.75.75v2.5a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8 5Zm0 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+                </svg>
+                Failures
+              </span>
+            )}
+            {tab === "workflows" && (
+              <span className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm10.28 7.97a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0l-2.25-2.25a.75.75 0 1 1 1.06-1.06l1.72 1.72 3.72-3.72a.75.75 0 0 1 1.06 0Z" />
+                </svg>
+                Workflow Runs
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* ── Agent Context Chain ──────────────────────────────── */}
-      {!searchResults && (
+      {!searchResults && activeTab === "commits" && (
         <ContextChain repoId={id} branch={selectedBranch ?? undefined} />
       )}
 
-      {/* ── Commit List ─────────────────────────────────────── */}
+      {/* ── Commit List (commits tab) ──────────────────────── */}
+      {activeTab === "commits" && (
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2
@@ -663,6 +736,199 @@ export default function RepoDetailPage() {
             </div>
           ))}
       </div>
+      )}
+
+      {/* ── Failures Tab (v5) ──────────────────────────────── */}
+      {activeTab === "failures" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2
+              className="text-base font-semibold"
+              style={{ color: "var(--fg-default)" }}
+            >
+              Failed Approaches
+            </h2>
+            <span className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+              {failures.length} failure{failures.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {failuresLoading && (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <CommitSkeleton key={i} />
+              ))}
+            </div>
+          )}
+
+          {!failuresLoading && failures.length === 0 && (
+            <div className="card p-10 text-center">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 16 16"
+                fill="var(--success-fg)"
+                className="mx-auto mb-3"
+              >
+                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <h3
+                className="text-base font-semibold mb-1"
+                style={{ color: "var(--fg-default)" }}
+              >
+                No failed approaches recorded
+              </h3>
+              <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+                Commits tagged with failure context will appear here.
+              </p>
+            </div>
+          )}
+
+          {!failuresLoading && failures.length > 0 &&
+            failures.map((commit) => (
+              <CommitCard key={commit.id} commit={commit} />
+            ))
+          }
+        </div>
+      )}
+
+      {/* ── Workflow Runs Tab (v5) ─────────────────────────── */}
+      {activeTab === "workflows" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2
+              className="text-base font-semibold"
+              style={{ color: "var(--fg-default)" }}
+            >
+              Workflow Runs
+            </h2>
+            <span className="text-xs" style={{ color: "var(--fg-subtle)" }}>
+              {workflowRuns.length} run{workflowRuns.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {workflowRuns.length === 0 && (
+            <div className="card p-10 text-center">
+              <svg
+                width="40"
+                height="40"
+                viewBox="0 0 16 16"
+                fill="var(--fg-subtle)"
+                className="mx-auto mb-3"
+              >
+                <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm10.28 7.97a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0l-2.25-2.25a.75.75 0 1 1 1.06-1.06l1.72 1.72 3.72-3.72a.75.75 0 0 1 1.06 0Z" />
+              </svg>
+              <h3
+                className="text-base font-semibold mb-1"
+                style={{ color: "var(--fg-default)" }}
+              >
+                No workflow runs yet
+              </h3>
+              <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+                Workflow checks will run automatically on new commits.
+              </p>
+            </div>
+          )}
+
+          {workflowRuns.length > 0 &&
+            workflowRuns.map((run) => {
+              const statusColor =
+                run.status === "passed"
+                  ? "var(--success-fg)"
+                  : run.status === "failed"
+                    ? "var(--danger-fg)"
+                    : run.status === "warning"
+                      ? "var(--warning-fg)"
+                      : "var(--fg-muted)";
+
+              return (
+                <div
+                  key={run.id}
+                  className="card card-hover p-4 animate-in"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {/* Status dot */}
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: statusColor }}
+                        />
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: "var(--fg-default)" }}
+                        >
+                          {run.event_type === "commit" ? "Commit" : run.event_type === "pr_open" ? "PR Opened" : "PR Merged"} Check
+                        </span>
+                        <span
+                          className="text-xs font-mono px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: statusColor + "20", color: statusColor }}
+                        >
+                          {run.status}
+                        </span>
+                      </div>
+                      {run.summary && (
+                        <p className="text-xs mt-1.5" style={{ color: "var(--fg-muted)" }}>
+                          {run.summary}
+                        </p>
+                      )}
+                      {/* Individual checks */}
+                      {run.checks && run.checks.length > 0 && (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {run.checks.map((check, i) => {
+                            const checkColor =
+                              check.status === "passed"
+                                ? "var(--success-fg)"
+                                : check.status === "failed"
+                                  ? "var(--danger-fg)"
+                                  : check.status === "warning"
+                                    ? "var(--warning-fg)"
+                                    : "var(--fg-subtle)";
+                            return (
+                              <span
+                                key={i}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
+                                style={{
+                                  backgroundColor: checkColor + "15",
+                                  color: checkColor,
+                                  border: `1px solid ${checkColor}40`,
+                                }}
+                                title={check.message}
+                              >
+                                {check.status === "passed" && (
+                                  <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+                                  </svg>
+                                )}
+                                {check.status === "failed" && (
+                                  <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+                                  </svg>
+                                )}
+                                {check.status === "warning" && (
+                                  <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Z" />
+                                  </svg>
+                                )}
+                                {check.name.replace(/_/g, " ")}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <span
+                      className="text-xs whitespace-nowrap shrink-0"
+                      style={{ color: "var(--fg-subtle)" }}
+                    >
+                      {formatRelativeTime(run.created_at)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      )}
     </div>
   );
 }

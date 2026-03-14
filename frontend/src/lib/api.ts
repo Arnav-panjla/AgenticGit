@@ -83,6 +83,37 @@ export interface KnowledgeContext {
   handoff_summary?: string;
 }
 
+export interface FailureContext {
+  failed: boolean;
+  error_type?: string;
+  error_detail?: string;
+  failed_approach?: string;
+  root_cause?: string;
+  severity?: "low" | "medium" | "high";
+}
+
+export interface CheckResult {
+  name: string;
+  status: "passed" | "failed" | "warning" | "skipped";
+  severity: "info" | "warning" | "critical";
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface WorkflowRun {
+  id: string;
+  repo_id: string;
+  commit_id: string | null;
+  pr_id: string | null;
+  event_type: "commit" | "pr_open" | "pr_merge";
+  status: string;
+  checks: CheckResult[];
+  summary: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
 export interface Commit {
   id: string;
   repo_id: string;
@@ -100,6 +131,7 @@ export interface Commit {
   trace_tools?: string[];
   trace_result?: string;
   knowledge_context?: KnowledgeContext;
+  failure_context?: FailureContext;
   parent_commit_id?: string;
   created_at: string;
 }
@@ -313,6 +345,22 @@ export const repoApi = {
     if (branch) path += `?branch=${encodeURIComponent(branch)}`;
     return api.get<ContextChain>(path);
   },
+  searchFailures: (id: string, options?: { error_type?: string; severity?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.error_type) params.set("error_type", options.error_type);
+    if (options?.severity) params.set("severity", options.severity);
+    if (options?.limit) params.set("limit", String(options.limit));
+    const qs = params.toString();
+    return api.get<Commit[]>(`/repositories/${id}/commits/failures${qs ? `?${qs}` : ""}`);
+  },
+  workflowRuns: (id: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return api.get<WorkflowRun[]>(`/repositories/${id}/workflow-runs${qs ? `?${qs}` : ""}`);
+  },
+  commitWorkflow: (repoId: string, commitId: string) =>
+    api.get<WorkflowRun>(`/repositories/${repoId}/commits/${commitId}/workflow`),
 };
 
 export const issueApi = {

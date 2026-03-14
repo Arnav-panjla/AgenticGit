@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import type { Commit } from "@/lib/api";
 import { formatRelativeTime, getReasoningTypeStyle } from "@/lib/utils";
 
@@ -12,6 +15,7 @@ interface CommitCardProps {
 
 export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
   const [expanded, setExpanded] = useState(showExpanded);
+  const [contentExpanded, setContentExpanded] = useState(false);
   const reasoningStyle = commit.reasoning_type
     ? getReasoningTypeStyle(commit.reasoning_type)
     : null;
@@ -30,6 +34,9 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
      commit.knowledge_context.open_questions?.length ||
      commit.knowledge_context.next_steps?.length ||
      commit.knowledge_context.handoff_summary);
+
+  const hasFailure = commit.failure_context?.failed;
+  const hasContent = commit.content && commit.content.length > 0 && commit.content !== '[content not found]';
 
   return (
     <div className="card card-hover p-4 animate-in">
@@ -90,7 +97,7 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
           </div>
         </div>
 
-        {/* Right side: time + reasoning badge */}
+        {/* Right side: time + reasoning badge + failure badge */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <span
             className="text-xs whitespace-nowrap"
@@ -108,6 +115,21 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
               }}
             >
               {reasoningStyle.label}
+            </span>
+          )}
+          {hasFailure && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: "var(--danger-subtle)",
+                color: "var(--danger-fg)",
+                border: "1px solid var(--danger-muted, var(--danger-fg))",
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z" />
+              </svg>
+              Failed{commit.failure_context?.severity ? ` (${commit.failure_context.severity})` : ''}
             </span>
           )}
         </div>
@@ -139,6 +161,118 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Failure Context Details (v5) */}
+      {hasFailure && commit.failure_context && (
+        <div
+          className="mt-3 p-3 rounded-lg"
+          style={{
+            backgroundColor: "var(--danger-subtle)",
+            border: "1px solid var(--danger-muted, var(--danger-fg))",
+          }}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ color: "var(--danger-fg)" }}>
+              <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575ZM8 5a.75.75 0 0 0-.75.75v2.5a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8 5Zm0 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" />
+            </svg>
+            <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--danger-fg)" }}>
+              Failed Approach
+            </span>
+            {commit.failure_context.error_type && (
+              <span
+                className="ml-auto text-xs font-mono px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: "var(--bg-default)", color: "var(--danger-fg)" }}
+              >
+                {commit.failure_context.error_type}
+              </span>
+            )}
+          </div>
+          {commit.failure_context.failed_approach && (
+            <p className="text-xs leading-relaxed mb-1.5" style={{ color: "var(--fg-default)" }}>
+              <strong>Approach:</strong> {commit.failure_context.failed_approach}
+            </p>
+          )}
+          {commit.failure_context.error_detail && (
+            <p className="text-xs leading-relaxed mb-1.5" style={{ color: "var(--fg-muted)" }}>
+              <strong>Error:</strong> {commit.failure_context.error_detail}
+            </p>
+          )}
+          {commit.failure_context.root_cause && (
+            <p className="text-xs leading-relaxed" style={{ color: "var(--fg-muted)" }}>
+              <strong>Root Cause:</strong> {commit.failure_context.root_cause}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Expandable Markdown Content (v5) */}
+      {hasContent && (
+        <div
+          className="mt-3 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <button
+            onClick={() => setContentExpanded(!contentExpanded)}
+            className="flex items-center gap-1.5 text-xs font-medium transition-colors w-full"
+            style={{ color: "var(--accent-fg)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "0.8";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "1";
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className="transition-transform duration-200"
+              style={{
+                transform: contentExpanded ? "rotate(90deg)" : "rotate(0deg)",
+              }}
+            >
+              <path d="M6.22 3.22a.75.75 0 011.06 0l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 010-1.06z" />
+            </svg>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M3.75 1.5a.25.25 0 0 0-.25.25v11.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25V6H9.75A1.75 1.75 0 0 1 8 4.25V1.5Zm5.75 0v2.75c0 .138.112.25.25.25h2.75L9.5 1.5ZM2 1.75C2 .784 2.784 0 3.75 0h5.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v8.586A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25Z" />
+            </svg>
+            <span>View Content</span>
+            <span
+              className="px-1.5 rounded-full text-xs"
+              style={{
+                backgroundColor: "var(--bg-subtle)",
+                color: "var(--fg-subtle)",
+              }}
+            >
+              {commit.content!.length > 1000
+                ? `${(commit.content!.length / 1000).toFixed(1)}KB`
+                : `${commit.content!.length} chars`}
+            </span>
+          </button>
+
+          {contentExpanded && (
+            <div
+              className="mt-3 p-4 rounded-lg overflow-x-auto animate-in prose-container"
+              style={{
+                backgroundColor: "var(--bg-inset)",
+                border: "1px solid var(--border-muted)",
+                maxHeight: "500px",
+                overflowY: "auto",
+              }}
+            >
+              <div className="prose prose-sm prose-invert max-w-none">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                >
+                  {commit.content!}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

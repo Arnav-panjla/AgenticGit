@@ -1,17 +1,19 @@
 /**
- * Commit Routes (v3)
+ * Commit Routes (v5)
  * 
- * Includes semantic search, reasoning graph, replay trace, and
- * knowledge context handoff endpoints for multi-agent collaboration.
+ * Includes semantic search, reasoning graph, replay trace,
+ * knowledge context handoff, failure memory search, and
+ * workflow run endpoints for multi-agent collaboration.
  */
 
 import { FastifyInstance } from 'fastify';
 import * as sdk from '../sdk';
 import { CommitOptions } from '../sdk';
+import { runCommitHooks, getWorkflowRuns, getWorkflowRunForCommit } from '../services/hooks';
 
 export async function commitRoutes(app: FastifyInstance) {
   /**
-   * Commit memory (v3 - with semantic features + knowledge context)
+   * Commit memory (v5 - with semantic features + knowledge context + failure memory)
    */
   app.post('/:repoId/commits', async (req, reply) => {
     const { repoId } = req.params as any;
@@ -25,6 +27,7 @@ export async function commitRoutes(app: FastifyInstance) {
       trace,
       skip_semantics,
       knowledge_context,
+      failure_context,
     } = req.body as any;
 
     if (!branch || !content || !message || !author_ens) {
@@ -63,8 +66,30 @@ export async function commitRoutes(app: FastifyInstance) {
       };
     }
 
+    // Parse failure context if provided (v5)
+    if (failure_context) {
+      options.failureContext = {
+        failed: failure_context.failed ?? true,
+        error_type: failure_context.error_type || undefined,
+        error_detail: failure_context.error_detail || undefined,
+        failed_approach: failure_context.failed_approach || undefined,
+        root_cause: failure_context.root_cause || undefined,
+        severity: failure_context.severity || undefined,
+      };
+    }
+
     try {
       const commit = await sdk.commitMemory(repoId, branch, content, message, author_ens, options);
+
+      // Fire-and-forget: run async workflow hooks (never blocks the response)
+      runCommitHooks({
+        repoId,
+        commitId: commit.id,
+        content,
+        message,
+        knowledgeContext: knowledge_context || null,
+      }).catch(() => {}); // swallow — hooks never break commit flow
+
       return reply.status(201).send(commit);
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
@@ -181,6 +206,63 @@ export async function commitRoutes(app: FastifyInstance) {
     try {
       const chain = await sdk.getContextChain(repoId, branch);
       return chain;
+    } catch (e: any) {
+      return reply.status(400).send({ error: e.message });
+    }
+  });
+
+  // ─── Failure Memory (v5) ────────────────────────────────────────────────────
+
+  /**
+   * Search commits tagged as failures.
+   * Helps agents learn from past failed approaches.
+   */
+  app.get('/:repoId/commits/failures', async (req, reply) => {
+    const { repoId } = req.params as any;
+    const { error_type, severity, limit } = req.query as any;
+
+    try {
+      const failures = await sdk.searchFailures(repoId, {
+        errorType: error_type,
+        severity,
+        limit: parseInt(limit) || 20,
+      });
+      return failures;
+    } catch (e: any) {
+      return reply.status(400).send({ error: e.message });
+    }
+  });
+
+  // ─── Workflow Runs (v5) ─────────────────────────────────────────────────────
+
+  /**
+   * Get workflow runs for a repository.
+   * Returns hook check results (security scan, content quality, etc.)
+   */
+  app.get('/:repoId/workflow-runs', async (req, reply) => {
+    const { repoId } = req.params as any;
+    const { limit } = req.query as any;
+
+    try {
+      const runs = await getWorkflowRuns(repoId, parseInt(limit) || 50);
+      return runs;
+    } catch (e: any) {
+      return reply.status(400).send({ error: e.message });
+    }
+  });
+
+  /**
+   * Get workflow run for a specific commit.
+   */
+  app.get('/:repoId/commits/:commitId/workflow', async (req, reply) => {
+    const { commitId } = req.params as any;
+
+    try {
+      const run = await getWorkflowRunForCommit(commitId);
+      if (!run) {
+        return reply.status(404).send({ error: 'No workflow run found for this commit' });
+      }
+      return run;
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
     }
