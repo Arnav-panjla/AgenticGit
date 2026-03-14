@@ -386,33 +386,60 @@ section {
   border-left: 3px solid var(--purple-400);
 }
 
-/* Commit graph mockup */
+/* Commit graph — SVG branch visualization (v6) */
 .mock-graph {
   background: var(--bg-secondary); border: 1px solid var(--border);
   border-radius: 10px; padding: 1.5rem; overflow-x: auto;
 }
-.graph-nodes { display: flex; align-items: flex-start; gap: 1.5rem; position: relative; }
-.graph-node {
-  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-  min-width: 100px; position: relative;
+.commit-graph-svg {
+  width: 100%; min-width: 600px; height: 220px; display: block;
 }
-.graph-node .gn-dot {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--sky-400); background: var(--bg-primary);
-  z-index: 1;
+.commit-graph-svg .branch-line {
+  fill: none; stroke-width: 2.5; stroke-linecap: round;
+  stroke-dasharray: 1000; stroke-dashoffset: 1000;
+  transition: stroke-dashoffset 1.8s ease-in-out;
 }
-.graph-node.merge .gn-dot { border-color: var(--purple-400); background: var(--purple-400); }
-.graph-node .gn-label {
-  font-size: 0.65rem; color: var(--text-muted); font-family: monospace;
+.commit-graph-svg .branch-line.main-line { stroke: var(--sky-400); }
+.commit-graph-svg .branch-line.feature-line { stroke: var(--purple-400); }
+.commit-graph-svg.animate .branch-line { stroke-dashoffset: 0; }
+
+.commit-graph-svg .commit-dot {
+  fill: var(--bg-primary); stroke-width: 2.5; r: 7;
+  opacity: 0; transition: opacity 0.3s ease;
 }
-.graph-node .gn-msg {
-  font-size: 0.7rem; color: var(--text-secondary); text-align: center;
-  max-width: 110px;
+.commit-graph-svg .commit-dot.main-dot { stroke: var(--sky-400); }
+.commit-graph-svg .commit-dot.feature-dot { stroke: var(--purple-400); }
+.commit-graph-svg .commit-dot.merge-dot {
+  stroke: var(--purple-400); fill: var(--purple-400);
 }
-.graph-line {
-  position: absolute; top: 7px; left: 0; right: 0; height: 2px;
-  background: var(--border); z-index: 0;
+.commit-graph-svg.animate .commit-dot { opacity: 1; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(1) { transition-delay: 0.3s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(2) { transition-delay: 0.6s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(3) { transition-delay: 0.9s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(4) { transition-delay: 1.0s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(5) { transition-delay: 1.2s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(6) { transition-delay: 1.4s; }
+.commit-graph-svg.animate .commit-dot:nth-of-type(7) { transition-delay: 1.6s; }
+
+.commit-graph-svg .commit-label {
+  font-family: monospace; font-size: 10px; fill: var(--text-muted);
+  opacity: 0; transition: opacity 0.3s ease;
 }
+.commit-graph-svg .commit-msg {
+  font-family: inherit; font-size: 11px; fill: var(--text-secondary);
+  opacity: 0; transition: opacity 0.3s ease;
+}
+.commit-graph-svg.animate .commit-label,
+.commit-graph-svg.animate .commit-msg { opacity: 1; }
+.commit-graph-svg.animate .commit-label:nth-of-type(1),
+.commit-graph-svg.animate .commit-msg:nth-of-type(1) { transition-delay: 0.4s; }
+
+.commit-graph-svg .branch-tag {
+  font-family: monospace; font-size: 10px; font-weight: 600;
+  rx: 4; ry: 4;
+}
+.commit-graph-svg .glow-filter { flood-color: var(--sky-400); }
+.commit-graph-svg .glow-filter-purple { flood-color: var(--purple-400); }
 
 /* ══════════════════════════════════════════════════════════════
    7. Tech Stack
