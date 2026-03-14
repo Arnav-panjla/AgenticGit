@@ -128,17 +128,31 @@ For bonus criteria, require clear evidence of implementation.`;
  * Uses deterministic scoring based on content analysis
  */
 function mockJudge(submissionContent: string, scorecard: Scorecard): JudgeResult {
-  const content = submissionContent.toLowerCase();
+  const content = (submissionContent || '').toLowerCase();
+
+  // Normalize unit_tests to array of objects with name/points
+  const unitTests = Array.isArray(scorecard.unit_tests)
+    ? scorecard.unit_tests
+        .map((t: any) =>
+          typeof t === 'string'
+            ? { name: t, points: 10 }
+            : { name: t?.name ?? 'test', points: typeof t?.points === 'number' ? t.points : 10 }
+        )
+    : [];
+
+  const bonusCriteria = Array.isArray(scorecard.bonus_criteria)
+    ? scorecard.bonus_criteria.map((c: any) => String(c || ''))
+    : [];
   
   // Simulate test passing based on content keywords
   const passed_tests: string[] = [];
   const failed_tests: string[] = [];
 
-  for (const test of scorecard.unit_tests) {
+  for (const test of unitTests) {
     // Simple heuristic: test passes if submission mentions related keywords
     const testName = test.name.toLowerCase();
     const keywords = testName.split(/[\s_-]+/);
-    const hasKeywords = keywords.some(kw => content.includes(kw) && kw.length > 2);
+    const hasKeywords = keywords.some((kw: string) => content.includes(kw) && kw.length > 2);
     
     if (hasKeywords && Math.random() > 0.3) {
       passed_tests.push(test.name);
@@ -151,7 +165,7 @@ function mockJudge(submissionContent: string, scorecard: Scorecard): JudgeResult
   const bonus_achieved: string[] = [];
   const bonus_missed: string[] = [];
 
-  for (const criterion of scorecard.bonus_criteria) {
+  for (const criterion of bonusCriteria) {
     const criterionLower = criterion.toLowerCase();
     if (content.includes(criterionLower.split(' ')[0]) && Math.random() > 0.5) {
       bonus_achieved.push(criterion);
@@ -179,8 +193,8 @@ function mockJudge(submissionContent: string, scorecard: Scorecard): JudgeResult
     bonus_missed,
     code_quality_score,
     reasoning: `[Mock Judge] Evaluated submission of ${submissionContent.length} characters. ` +
-      `Passed ${passed_tests.length}/${scorecard.unit_tests.length} tests. ` +
-      `Achieved ${bonus_achieved.length}/${scorecard.bonus_criteria.length} bonus criteria.`,
+      `Passed ${passed_tests.length}/${unitTests.length} tests. ` +
+      `Achieved ${bonus_achieved.length}/${bonusCriteria.length} bonus criteria.`,
     suggestions: [
       'Add more comprehensive error handling',
       'Include inline documentation',
@@ -274,4 +288,72 @@ export async function getJudgement(
  */
 export function isRealJudge(): boolean {
   return openai !== null;
+}
+
+// ─── Competitive Bounty Judging (v3) ─────────────────────────────────────────
+
+/**
+ * Judge all submissions for a competitive bounty.
+ * Scores each submission, updates verdict in bounty_submissions,
+ * and returns the winner (highest points_awarded).
+ */
+export async function judgeAllSubmissions(
+  bountyId: string,
+  scorecard: Scorecard
+): Promise<{
+  results: Array<{ agent_id: string; points_awarded: number; verdict: Verdict; is_mock: boolean }>;
+  winner: { agent_id: string; points_awarded: number } | null;
+}> {
+  // Get all submissions
+  const submissions = await query<{
+    id: string;
+    agent_id: string;
+    content: string;
+  }>(
+    'SELECT id, agent_id, content FROM bounty_submissions WHERE bounty_id = $1 ORDER BY submitted_at ASC',
+    [bountyId]
+  );
+
+  if (submissions.length === 0) {
+    return { results: [], winner: null };
+  }
+
+  // Update bounty status to judging
+  await query(`UPDATE issue_bounties SET status = 'judging' WHERE id = $1`, [bountyId]);
+
+  const results: Array<{ agent_id: string; points_awarded: number; verdict: Verdict; is_mock: boolean; submission_id: string }> = [];
+
+  // Judge each submission
+  for (const sub of submissions) {
+    const result = await judgeSubmission(bountyId, sub.agent_id, sub.content, scorecard);
+
+    // Store verdict on the bounty_submission row
+    await query(
+      `UPDATE bounty_submissions SET judge_verdict = $1, points_awarded = $2
+       WHERE id = $3`,
+      [JSON.stringify(result.verdict), result.points_awarded, sub.id]
+    );
+
+    results.push({
+      agent_id: sub.agent_id,
+      points_awarded: result.points_awarded,
+      verdict: result.verdict,
+      is_mock: result.is_mock,
+      submission_id: sub.id,
+    });
+  }
+
+  // Find winner (highest points)
+  const sorted = [...results].sort((a, b) => b.points_awarded - a.points_awarded);
+  const winner = sorted[0].points_awarded > 0 ? { agent_id: sorted[0].agent_id, points_awarded: sorted[0].points_awarded } : null;
+
+  return {
+    results: results.map(r => ({
+      agent_id: r.agent_id,
+      points_awarded: r.points_awarded,
+      verdict: r.verdict,
+      is_mock: r.is_mock,
+    })),
+    winner,
+  };
 }

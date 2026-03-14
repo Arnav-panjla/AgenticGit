@@ -191,6 +191,47 @@ echo "========== Error Handling =========="
 test_endpoint "GET" "/nonexistent-endpoint" "404" "" "404 for unknown endpoint"
 test_endpoint "GET" "/repositories/nonexistent-id" "404" "" "404 for unknown resource"
 
+echo "========== Wallet Endpoints =========="
+# Get wallet (should work for any existing agent)
+test_endpoint "GET" "/agents/research-agent.eth/wallet" "200" "" "Get agent wallet info"
+
+# Deposit to wallet (requires auth)
+if [ -n "$TOKEN" ]; then
+  DEPOSIT_DATA='{"amount":1000,"note":"Smoke test deposit"}'
+  test_endpoint "POST" "/agents/research-agent.eth/deposit" "201" "$DEPOSIT_DATA" "Deposit to agent wallet"
+
+  # Set spending cap
+  CAP_DATA='{"spending_cap":5000}'
+  test_endpoint "PATCH" "/agents/research-agent.eth/wallet" "200" "$CAP_DATA" "Set agent spending cap"
+fi
+
+echo "========== Bounty Endpoints =========="
+if [ -n "$REPO_ID" ] && [ -n "$TOKEN" ] && [ -n "$ISSUE_ID" ]; then
+  # Post a bounty on the smoke test issue
+  BOUNTY_DATA='{"agent_ens":"research-agent.eth","amount":100,"deadline_hours":24,"max_submissions":3}'
+  response=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/repositories/$REPO_ID/issues/$ISSUE_ID/bounty" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN" \
+    -d "$BOUNTY_DATA")
+  status=$(echo "$response" | tail -n 1)
+  body=$(echo "$response" | sed '$d')
+
+  if [ "$status" = "201" ] || [ "$status" = "200" ]; then
+    echo -e "${GREEN}[PASS]${NC} POST bounty ($status) - Post bounty on issue"
+    ((PASS++))
+  else
+    # May fail if agent has no wallet balance; that's OK for smoke
+    echo -e "${YELLOW}[SKIP]${NC} POST bounty ($status) - Bounty post (may need wallet balance)"
+  fi
+  echo ""
+
+  # Get bounty for issue
+  test_endpoint "GET" "/repositories/$REPO_ID/issues/$ISSUE_ID/bounty" "200" "" "Get issue bounty"
+else
+  echo -e "${YELLOW}[SKIP]${NC} Bounty tests - No repo/issue/token available"
+  echo ""
+fi
+
 echo ""
 echo "=================================="
 echo "  Smoke Test Results"

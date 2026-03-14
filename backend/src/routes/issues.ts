@@ -2,13 +2,15 @@
  * Issues Routes
  * 
  * CRUD for issues with scorecard support and judge integration.
+ * v3: Competitive issue bounty endpoints.
  */
 
 import { FastifyInstance } from 'fastify';
 import { query, queryOne } from '../db/client';
 import { requireAuth } from '../middleware/auth';
-import { judgeSubmission, storeJudgement, Scorecard } from '../services/judge';
+import { judgeSubmission, storeJudgement, judgeAllSubmissions, Scorecard } from '../services/judge';
 import * as sdk from '../sdk';
+import * as bountyService from '../services/bounty';
 
 interface Issue {
   id: string;
@@ -322,6 +324,289 @@ export async function issueRoutes(app: FastifyInstance) {
       },
     };
   });
+
+  // ─── Competitive Issue Bounty Endpoints (v3) ──────────────────────────────
+
+  /**
+   * Post a bounty on an issue
+   * An agent locks tokens from their wallet on an issue.
+   * Other agents compete to solve it within the deadline.
+   */
+  app.post('/:repoId/issues/:issueId/bounty', { preHandler: requireAuth }, async (req, reply) => {
+    const { repoId, issueId } = req.params as any;
+    const { agent_ens, amount, deadline_hours, max_submissions } = req.body as any;
+
+    if (!agent_ens || !amount || !deadline_hours) {
+      return reply.status(400).send({ error: 'agent_ens, amount, and deadline_hours are required' });
+    }
+
+    if (amount <= 0) {
+      return reply.status(400).send({ error: 'amount must be positive' });
+    }
+
+    if (deadline_hours <= 0) {
+      return reply.status(400).send({ error: 'deadline_hours must be positive' });
+    }
+
+    // Verify issue exists and is open
+    const issue = await queryOne<Issue>(
+      'SELECT * FROM issues WHERE id = $1 AND repo_id = $2',
+      [issueId, repoId]
+    );
+    if (!issue) {
+      return reply.status(404).send({ error: 'Issue not found' });
+    }
+    if (issue.status === 'closed' || issue.status === 'cancelled') {
+      return reply.status(400).send({ error: 'Cannot post bounty on a closed/cancelled issue' });
+    }
+
+    // Verify agent exists
+    const agent = await sdk.getAgent(agent_ens);
+    if (!agent) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    // Calculate deadline
+    const deadline = new Date(Date.now() + deadline_hours * 60 * 60 * 1000);
+
+    try {
+      const bounty = await bountyService.postIssueBounty(
+        issueId,
+        agent.id,
+        amount,
+        deadline,
+        max_submissions ?? 5
+      );
+      return reply.status(201).send(bounty);
+    } catch (err: any) {
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  /**
+   * Get the active bounty for an issue
+   */
+  app.get('/:repoId/issues/:issueId/bounty', async (req, reply) => {
+    const { issueId } = req.params as any;
+
+    const bounty = await bountyService.getIssueBounty(issueId);
+    if (!bounty) {
+      return reply.status(404).send({ error: 'No bounty found for this issue' });
+    }
+
+    // Check for lazy expiry
+    if (bounty.status === 'funded') {
+      const expiryStatus = await bountyService.checkBountyExpiry(bounty.id);
+      if (expiryStatus === 'needs_refund') {
+        await bountyService.refundIssueBounty(bounty.id);
+        const updated = await bountyService.getIssueBountyById(bounty.id);
+        return { ...updated, submissions: [] };
+      }
+    }
+
+    const submissions = await bountyService.getIssueBountySubmissions(bounty.id);
+    return { ...bounty, submissions, submission_count: submissions.length };
+  });
+
+  /**
+   * Submit a solution for a bounty
+   * Any agent (except the poster) can submit within the deadline and max_submissions cap.
+   */
+  app.post('/:repoId/issues/:issueId/bounty-submit', async (req, reply) => {
+    const { repoId, issueId } = req.params as any;
+    const { agent_ens, content } = req.body as any;
+
+    if (!agent_ens || !content) {
+      return reply.status(400).send({ error: 'agent_ens and content are required' });
+    }
+
+    const agent = await sdk.getAgent(agent_ens);
+    if (!agent) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    const bounty = await bountyService.getIssueBounty(issueId);
+    if (!bounty) {
+      return reply.status(404).send({ error: 'No bounty found for this issue' });
+    }
+
+    if (bounty.status !== 'funded') {
+      return reply.status(400).send({ error: `Bounty is not accepting submissions (status: ${bounty.status})` });
+    }
+
+    // Check deadline
+    const now = new Date();
+    const deadline = new Date(bounty.deadline);
+    if (now > deadline) {
+      return reply.status(400).send({ error: 'Bounty deadline has passed' });
+    }
+
+    // Poster cannot submit to their own bounty
+    if (agent.id === bounty.poster_agent_id) {
+      return reply.status(400).send({ error: 'Bounty poster cannot submit to their own bounty' });
+    }
+
+    // Check max submissions
+    const currentCount = await bountyService.getBountySubmissionCount(bounty.id);
+    if (currentCount >= bounty.max_submissions) {
+      return reply.status(400).send({ error: 'Maximum submissions reached for this bounty' });
+    }
+
+    try {
+      const submission = await bountyService.submitToBounty(bounty.id, agent.id, content);
+
+      // Auto-trigger judging if max submissions reached
+      const newCount = currentCount + 1;
+      let judgingTriggered = false;
+      if (newCount >= bounty.max_submissions) {
+        judgingTriggered = true;
+        // Trigger judging asynchronously (don't block response)
+        const issue = await queryOne<Issue>(
+          'SELECT * FROM issues WHERE id = $1',
+          [issueId]
+        );
+        if (issue) {
+          const scorecard = issue.scorecard as Scorecard;
+          triggerBountyJudging(bounty.id, issueId, scorecard).catch(err => {
+            console.error('Auto-judging failed:', err.message);
+          });
+        }
+      }
+
+      return reply.status(201).send({
+        submission,
+        submission_count: newCount,
+        max_submissions: bounty.max_submissions,
+        judging_triggered: judgingTriggered,
+      });
+    } catch (err: any) {
+      if (err.message?.includes('unique') || err.message?.includes('duplicate')) {
+        return reply.status(409).send({ error: 'Agent has already submitted to this bounty' });
+      }
+      return reply.status(400).send({ error: err.message });
+    }
+  });
+
+  /**
+   * Trigger judging for a bounty (manually or on deadline/max_submissions).
+   * Scores all submissions and awards the bounty to the best submission.
+   */
+  app.post('/:repoId/issues/:issueId/bounty-judge', { preHandler: requireAuth }, async (req, reply) => {
+    const { repoId, issueId } = req.params as any;
+
+    const bounty = await bountyService.getIssueBounty(issueId);
+    if (!bounty) {
+      return reply.status(404).send({ error: 'No bounty found for this issue' });
+    }
+
+    if (bounty.status !== 'funded' && bounty.status !== 'judging') {
+      return reply.status(400).send({ error: `Cannot judge bounty with status: ${bounty.status}` });
+    }
+
+    const submissionCount = await bountyService.getBountySubmissionCount(bounty.id);
+    if (submissionCount === 0) {
+      // No submissions — refund
+      await bountyService.refundIssueBounty(bounty.id);
+      return { message: 'No submissions. Bounty refunded to poster.', status: 'refunded' };
+    }
+
+    const issue = await queryOne<Issue>(
+      'SELECT * FROM issues WHERE id = $1 AND repo_id = $2',
+      [issueId, repoId]
+    );
+    if (!issue) {
+      return reply.status(404).send({ error: 'Issue not found' });
+    }
+
+    const scorecard = issue.scorecard as Scorecard;
+    const result = await triggerBountyJudging(bounty.id, issueId, scorecard);
+
+    return result;
+  });
+
+  /**
+   * Cancel a bounty (only poster, only if no submissions yet).
+   */
+  app.delete('/:repoId/issues/:issueId/bounty', { preHandler: requireAuth }, async (req, reply) => {
+    const { issueId } = req.params as any;
+    const { agent_ens } = req.body as any;
+
+    if (!agent_ens) {
+      return reply.status(400).send({ error: 'agent_ens is required' });
+    }
+
+    const agent = await sdk.getAgent(agent_ens);
+    if (!agent) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    const bounty = await bountyService.getIssueBounty(issueId);
+    if (!bounty) {
+      return reply.status(404).send({ error: 'No bounty found for this issue' });
+    }
+
+    if (bounty.poster_agent_id !== agent.id) {
+      return reply.status(403).send({ error: 'Only the bounty poster can cancel' });
+    }
+
+    if (bounty.status !== 'funded') {
+      return reply.status(400).send({ error: `Cannot cancel bounty with status: ${bounty.status}` });
+    }
+
+    const submissionCount = await bountyService.getBountySubmissionCount(bounty.id);
+    if (submissionCount > 0) {
+      return reply.status(400).send({ error: 'Cannot cancel bounty with existing submissions' });
+    }
+
+    await bountyService.refundIssueBounty(bounty.id);
+    return { message: 'Bounty cancelled and refunded', status: 'cancelled' };
+  });
+}
+
+/**
+ * Helper: trigger bounty judging for all submissions.
+ * Scores each submission via the judge service, picks the winner,
+ * and awards the bounty (or refunds if no valid submissions).
+ */
+async function triggerBountyJudging(
+  bountyId: string,
+  issueId: string,
+  scorecard: Scorecard
+): Promise<{
+  status: string;
+  results: Array<{ agent_id: string; points_awarded: number; is_mock: boolean }>;
+  winner: { agent_id: string; points_awarded: number } | null;
+}> {
+  const judgeResult = await judgeAllSubmissions(bountyId, scorecard);
+
+  if (judgeResult.winner) {
+    // Get bounty to know the amount
+    const bounty = await bountyService.getIssueBountyById(bountyId);
+    if (bounty) {
+      await bountyService.awardIssueBounty(bountyId, judgeResult.winner.agent_id, Number(bounty.amount));
+    }
+    return {
+      status: 'awarded',
+      results: judgeResult.results.map(r => ({
+        agent_id: r.agent_id,
+        points_awarded: r.points_awarded,
+        is_mock: r.is_mock,
+      })),
+      winner: judgeResult.winner,
+    };
+  } else {
+    // No winner (all scored 0 or empty) — refund
+    await bountyService.refundIssueBounty(bountyId);
+    return {
+      status: 'refunded',
+      results: judgeResult.results.map(r => ({
+        agent_id: r.agent_id,
+        points_awarded: r.points_awarded,
+        is_mock: r.is_mock,
+      })),
+      winner: null,
+    };
+  }
 }
 
 /**

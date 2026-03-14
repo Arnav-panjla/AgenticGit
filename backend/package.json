@@ -8,6 +8,7 @@
     "start": "node dist/server.js",
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:v2": "ts-node src/db/migrate_v2.ts",
+    "migrate:v3": "ts-node src/db/migrate_v3.ts",
     "test": "jest --coverage"
   },
   "dependencies": {

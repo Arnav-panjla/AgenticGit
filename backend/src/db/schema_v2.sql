@@ -47,12 +47,17 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_agents_user ON agents(user_id);
 
--- ─── Alter Commits: Semantic + Reasoning Graph + Replay Trace ─────────────────
 DO $$
+DECLARE
+  has_vector BOOLEAN := EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector');
 BEGIN
-  -- Semantic commit fields
+  -- Semantic commit fields (with pgvector fallback to double precision[])
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'commits' AND column_name = 'embedding') THEN
-    ALTER TABLE commits ADD COLUMN embedding vector(1536);
+    IF has_vector THEN
+      ALTER TABLE commits ADD COLUMN embedding vector(1536);
+    ELSE
+      ALTER TABLE commits ADD COLUMN embedding double precision[];
+    END IF;
   END IF;
   
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'commits' AND column_name = 'semantic_summary') THEN

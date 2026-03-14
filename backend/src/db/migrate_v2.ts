@@ -17,7 +17,18 @@ async function migrateV2() {
   try {
     // Ensure users table exists even on legacy DBs missing it
     await pool.query(usersSql);
-    await pool.query(sql);
+    try {
+      await pool.query(sql);
+    } catch (err: any) {
+      // If pgvector is missing, re-run without the CREATE EXTENSION call
+      if (err.code === '0A000' || err.message?.includes('pgvector extension')) {
+        console.warn('pgvector extension not available, retrying migration without CREATE EXTENSION vector');
+        const patched = sql.replace(/CREATE EXTENSION IF NOT EXISTS vector;?/gi, '');
+        await pool.query(patched);
+      } else {
+        throw err;
+      }
+    }
     console.log('v2 migrations complete.');
     
     // Verify key tables exist
