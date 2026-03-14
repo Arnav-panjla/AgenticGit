@@ -883,39 +883,79 @@ section {
       </div>
     </div>
 
-    <!-- Graph -->
+    <!-- Graph — SVG Branch Visualization (v6) -->
     <div class="demo-panel" id="demo-graph">
       <div class="mock-graph">
-        <div style="position:relative;">
-          <div class="graph-line"></div>
-          <div class="graph-nodes">
-            <div class="graph-node">
-              <div class="gn-dot"></div>
-              <div class="gn-label">a1b2c3d</div>
-              <div class="gn-msg">init: project scaffold</div>
-            </div>
-            <div class="graph-node">
-              <div class="gn-dot"></div>
-              <div class="gn-label">e4f5g6h</div>
-              <div class="gn-msg">feat: add Redis client</div>
-            </div>
-            <div class="graph-node">
-              <div class="gn-dot"></div>
-              <div class="gn-label">i7j8k9l</div>
-              <div class="gn-msg">feat: cache middleware</div>
-            </div>
-            <div class="graph-node">
-              <div class="gn-dot"></div>
-              <div class="gn-label">m0n1o2p</div>
-              <div class="gn-msg">test: cache hit/miss</div>
-            </div>
-            <div class="graph-node merge">
-              <div class="gn-dot"></div>
-              <div class="gn-label">q3r4s5t</div>
-              <div class="gn-msg">merge: feat/caching &rarr; main</div>
-            </div>
-          </div>
-        </div>
+        <svg class="commit-graph-svg" viewBox="0 0 700 220" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <!-- Glow filters -->
+            <filter id="glow-main" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+              <feFlood flood-color="#7dd3fc" flood-opacity="0.4" result="color"/>
+              <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+              <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <filter id="glow-feature" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+              <feFlood flood-color="#c084fc" flood-opacity="0.4" result="color"/>
+              <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+              <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <!-- Gradient for feature branch -->
+            <linearGradient id="feature-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7dd3fc"/>
+              <stop offset="30%" stop-color="#c084fc"/>
+              <stop offset="100%" stop-color="#c084fc"/>
+            </linearGradient>
+          </defs>
+
+          <!-- Main branch line: 5 commits on Y=80 -->
+          <!-- x positions: 60, 170, 390, 500, 610 -->
+          <path class="branch-line main-line" filter="url(#glow-main)"
+                d="M 60 80 L 170 80 L 390 80 L 500 80 L 610 80"/>
+
+          <!-- Feature branch: forks from commit 2 (170,80), curves up to (280,160) and (390,160), merges back at commit 5 (610,80) -->
+          <path class="branch-line feature-line" filter="url(#glow-feature)"
+                d="M 170 80 C 200 80, 220 160, 280 160 L 390 160 C 460 160, 560 160, 610 80"/>
+
+          <!-- Main branch commits (dots) -->
+          <circle class="commit-dot main-dot" cx="60"  cy="80" filter="url(#glow-main)"/>
+          <circle class="commit-dot main-dot" cx="170" cy="80" filter="url(#glow-main)"/>
+          <circle class="commit-dot main-dot" cx="390" cy="80" filter="url(#glow-main)"/>
+          <circle class="commit-dot main-dot" cx="500" cy="80" filter="url(#glow-main)"/>
+
+          <!-- Feature branch commits -->
+          <circle class="commit-dot feature-dot" cx="280" cy="160" filter="url(#glow-feature)"/>
+          <circle class="commit-dot feature-dot" cx="390" cy="160" filter="url(#glow-feature)"/>
+
+          <!-- Merge commit -->
+          <circle class="commit-dot merge-dot" cx="610" cy="80" filter="url(#glow-feature)"/>
+
+          <!-- Labels (hashes) -->
+          <text class="commit-label" x="60"  y="55" text-anchor="middle">a1b2c3d</text>
+          <text class="commit-label" x="170" y="55" text-anchor="middle">e4f5g6h</text>
+          <text class="commit-label" x="390" y="55" text-anchor="middle">k8l9m0n</text>
+          <text class="commit-label" x="500" y="55" text-anchor="middle">o1p2q3r</text>
+          <text class="commit-label" x="610" y="55" text-anchor="middle">s4t5u6v</text>
+          <text class="commit-label" x="280" y="190" text-anchor="middle">i7j8k9l</text>
+          <text class="commit-label" x="390" y="190" text-anchor="middle">m0n1o2p</text>
+
+          <!-- Messages -->
+          <text class="commit-msg" x="60"  y="38" text-anchor="middle">init: scaffold</text>
+          <text class="commit-msg" x="170" y="38" text-anchor="middle">feat: Redis client</text>
+          <text class="commit-msg" x="390" y="38" text-anchor="middle">fix: env config</text>
+          <text class="commit-msg" x="500" y="38" text-anchor="middle">docs: API spec</text>
+          <text class="commit-msg" x="610" y="38" text-anchor="middle">merge: caching</text>
+          <text class="commit-msg" x="280" y="207" text-anchor="middle">feat: cache middleware</text>
+          <text class="commit-msg" x="390" y="207" text-anchor="middle">test: cache hit/miss</text>
+
+          <!-- Branch tags -->
+          <rect x="18" y="93" width="84" height="18" rx="4" fill="rgba(125,211,252,0.15)" stroke="rgba(125,211,252,0.4)" stroke-width="1"/>
+          <text x="60" y="106" text-anchor="middle" font-size="9" font-family="monospace" font-weight="600" fill="#7dd3fc">main</text>
+
+          <rect x="290" y="135" width="100" height="18" rx="4" fill="rgba(192,132,252,0.15)" stroke="rgba(192,132,252,0.4)" stroke-width="1"/>
+          <text x="340" y="148" text-anchor="middle" font-size="9" font-family="monospace" font-weight="600" fill="#c084fc">feat/caching</text>
+        </svg>
       </div>
     </div>
   </div>
@@ -1195,7 +1235,26 @@ section {
     document.querySelectorAll('.demo-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('demo-' + panel).classList.add('active');
     event.target.classList.add('active');
+    // Re-trigger graph animation when graph tab is selected
+    if (panel === 'graph') {
+      const svg = document.querySelector('.commit-graph-svg');
+      if (svg) { svg.classList.remove('animate'); void svg.offsetWidth; svg.classList.add('animate'); }
+    }
   };
+
+  // ── Commit Graph Scroll Animation (v6) ─────────────────────
+  const graphSvg = document.querySelector('.commit-graph-svg');
+  if (graphSvg) {
+    const graphObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          graphSvg.classList.add('animate');
+          graphObserver.disconnect();
+        }
+      });
+    }, { threshold: 0.3 });
+    graphObserver.observe(graphSvg);
+  }
 })();
 </script>
 </body>
