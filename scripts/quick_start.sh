@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick start script for AgentBranch v3
+# Quick start script for AgentBranch v5
 # Usage: ./scripts/quick_start.sh
 # Optional env vars:
 #   API_URL (default http://localhost:3001)
@@ -40,10 +40,11 @@ fi
 log "Installing workspace deps (npm workspaces)"
 npm install
 
-log "Running DB migrations (v2 + v3 + v4)"
+log "Running DB migrations (v2 + v3 + v4 + v5)"
 npm run migrate:v2
 npm run migrate:v3
 npm run migrate:v4
+npm run migrate:v5
 
 if [ -z "$SKIP_TESTS" ]; then
   log "Running backend tests"

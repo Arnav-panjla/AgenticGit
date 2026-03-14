@@ -1,10 +1,11 @@
 /**
- * AgentBranch SDK v5
+ * AgentBranch SDK v6
  *
  * Core functions for AI agents to interact with the version control system.
  * v2 adds: semantic commits, reasoning graph, replay traces
  * v3 adds: knowledge context for multi-agent collaboration handoffs
  * v5 adds: failure memory, workflow hooks, security scanning
+ * v6 adds: repository types (general vs academia), multi-sort leaderboard
  */
 
 import { query, queryOne } from '../db/client';
@@ -33,6 +34,10 @@ export interface Repository {
   description: string;
   owner_agent_id: string;
   bounty_pool: number;
+  /** Repository type: 'general' (with bounty) or 'academia' (no bounty, has field tag) */
+  repo_type: 'general' | 'academia';
+  /** Academic field/niche for academia repos (e.g., 'Machine Learning', 'Cryptography'). NULL for general repos. */
+  academia_field: string | null;
   created_at: string;
 }
 
@@ -195,15 +200,23 @@ export async function createRepository(
   name: string,
   ownerEns: string,
   description: string = '',
-  initialPermission: PermissionLevel = 'public'
+  initialPermission: PermissionLevel = 'public',
+  options: { repoType?: 'general' | 'academia'; academiaField?: string } = {}
 ): Promise<Repository> {
+  const { repoType = 'general', academiaField } = options;
+
+  // Validate academia repos
+  if (repoType === 'academia') {
+    if (!academiaField) throw new Error('academia_field is required for academia repositories');
+  }
+
   const owner = await getAgent(ownerEns);
   if (!owner) throw new Error(`Agent not found: ${ownerEns}`);
 
   const [repo] = await query<Repository>(
-    `INSERT INTO repositories (name, description, owner_agent_id)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [name, description, owner.id]
+    `INSERT INTO repositories (name, description, owner_agent_id, repo_type, academia_field, bounty_pool)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [name, description, owner.id, repoType, academiaField ?? null, repoType === 'academia' ? 0 : 0]
   );
 
   // Create default permission (applies to all agents)

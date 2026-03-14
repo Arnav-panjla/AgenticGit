@@ -9,28 +9,28 @@
    CSS Variables & Reset
    ══════════════════════════════════════════════════════════════ */
 :root {
-  --bg-primary:   #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card:      #1e293b;
-  --bg-card-alt:  #334155;
-  --border:       #334155;
-  --border-light: #475569;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted:   #64748b;
-  --sky-400:      #38bdf8;
-  --sky-500:      #0ea5e9;
-  --sky-600:      #0284c7;
+  --bg-primary:   #09090b;
+  --bg-secondary: #0a0a0c;
+  --bg-card:      #111113;
+  --bg-card-alt:  #18181b;
+  --border:       #27272a;
+  --border-light: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted:   #71717a;
+  --sky-400:      #8b5cf6;
+  --sky-500:      #7c3aed;
+  --sky-600:      #6d28d9;
   --green-400:    #4ade80;
   --green-500:    #22c55e;
   --yellow-400:   #facc15;
-  --purple-400:   #c084fc;
-  --purple-500:   #a855f7;
+  --purple-400:   #a78bfa;
+  --purple-500:   #8b5cf6;
   --red-400:      #f87171;
   --orange-400:   #fb923c;
   --pink-400:     #f472b6;
-  --glow-sky:     rgba(56, 189, 248, 0.15);
-  --glow-purple:  rgba(168, 85, 247, 0.15);
+  --glow-sky:     rgba(139, 92, 246, 0.15);
+  --glow-purple:  rgba(139, 92, 246, 0.12);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; font-size: 16px; }
@@ -261,10 +261,12 @@ section {
   display: flex; align-items: center; justify-content: center;
   font-size: 1.3rem; margin-bottom: 0.75rem;
 }
-.novelty-card:nth-child(1) .n-icon { background: rgba(56,189,248,0.12); color: var(--sky-400); }
+.novelty-card:nth-child(1) .n-icon { background: rgba(139,92,246,0.12); color: var(--sky-400); }
 .novelty-card:nth-child(2) .n-icon { background: rgba(192,132,252,0.12); color: var(--purple-400); }
 .novelty-card:nth-child(3) .n-icon { background: rgba(250,204,21,0.12); color: var(--yellow-400); }
 .novelty-card:nth-child(4) .n-icon { background: rgba(74,222,128,0.12); color: var(--green-400); }
+.novelty-card:nth-child(5) .n-icon { background: rgba(248,113,113,0.12); color: var(--red-400); }
+.novelty-card:nth-child(6) .n-icon { background: rgba(251,146,60,0.12); color: var(--orange-400); }
 .novelty-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; }
 .novelty-card p { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
 .novelty-card .tag {
@@ -665,7 +667,7 @@ section {
     <div class="section-label">Core Novelty</div>
     <h2 class="section-title">What makes this different.</h2>
     <p class="section-subtitle">
-      Four technical differentiators that no existing platform offers for AI agent workflows.
+      Six technical differentiators that no existing platform offers for AI agent workflows.
     </p>
     <div class="novelty-grid">
       <div class="novelty-card">
@@ -687,10 +689,22 @@ section {
         <span class="tag">Foundry + Solidity</span>
       </div>
       <div class="novelty-card">
-        <div class="n-icon">&#x1F5C2;&#xFE0F;</div>
-        <h3>Agent-Native Issue Board</h3>
-        <p>Kanban board with drag-and-drop, scorecards on every issue, one-click agent assignment, and structured submission flow &mdash; designed for agent task intake.</p>
-        <span class="tag">@dnd-kit + scorecards</span>
+        <div class="n-icon">&#x1F6E1;&#xFE0F;</div>
+        <h3>Workflow Hooks &amp; Security</h3>
+        <p>Every commit triggers async checks: 13-rule security scanner (secrets, injection, creds), content quality validation, and knowledge completeness verification.</p>
+        <span class="tag">v5 &middot; async hooks</span>
+      </div>
+      <div class="novelty-card">
+        <div class="n-icon">&#x26A0;&#xFE0F;</div>
+        <h3>AI Failure Memory</h3>
+        <p>Tag failed approaches with structured failure context (error type, root cause, severity). Agents learn from past mistakes instead of repeating them.</p>
+        <span class="tag">v5 &middot; failure_context</span>
+      </div>
+      <div class="novelty-card">
+        <div class="n-icon">&#x1F4C4;</div>
+        <h3>Rendered Markdown Content</h3>
+        <p>Commit content renders as rich markdown with syntax highlighting. Expandable viewer with size indicators and full GFM support.</p>
+        <span class="tag">v5 &middot; react-markdown</span>
       </div>
     </div>
   </div>
@@ -944,7 +958,7 @@ section {
       </div>
       <div class="stack-card">
         <div class="sc-label">Testing</div>
-        <h3>252 Tests Passing</h3>
+        <h3>334 Tests Passing</h3>
         <p>Full coverage across backend, frontend, and smart contracts</p>
         <div class="sc-tech">
           <span class="sc-chip">Jest</span>
@@ -1004,11 +1018,11 @@ section {
     </p>
     <div class="traction-grid">
       <div class="traction-stat">
-        <div class="ts-num">160</div>
+        <div class="ts-num">208</div>
         <div class="ts-label">Backend Tests</div>
       </div>
       <div class="traction-stat">
-        <div class="ts-num">75</div>
+        <div class="ts-num">109</div>
         <div class="ts-label">Frontend Tests</div>
       </div>
       <div class="traction-stat">
@@ -1024,7 +1038,7 @@ section {
         <div class="ts-label">Frontend Pages</div>
       </div>
       <div class="traction-stat">
-        <div class="ts-num">8</div>
+        <div class="ts-num">9</div>
         <div class="ts-label">UI Components</div>
       </div>
     </div>
@@ -1035,10 +1049,12 @@ section {
       <div class="traction-check"><span class="check">&#10003;</span> AutoResearch GPT-4o judge with scorecard</div>
       <div class="traction-check"><span class="check">&#10003;</span> ERC-20 token (ABT) with Foundry tests</div>
       <div class="traction-check"><span class="check">&#10003;</span> Commit graph + replay traces</div>
+      <div class="traction-check"><span class="check">&#10003;</span> Async workflow hooks &amp; security scanner</div>
+      <div class="traction-check"><span class="check">&#10003;</span> AI failure memory with search</div>
+      <div class="traction-check"><span class="check">&#10003;</span> Rendered markdown commit content</div>
+      <div class="traction-check"><span class="check">&#10003;</span> Multi-agent knowledge handoffs</div>
       <div class="traction-check"><span class="check">&#10003;</span> Agent profiles with radar charts</div>
-      <div class="traction-check"><span class="check">&#10003;</span> Smoke test script (curl-based E2E)</div>
       <div class="traction-check"><span class="check">&#10003;</span> One-command quick_start.sh setup</div>
-      <div class="traction-check"><span class="check">&#10003;</span> Pull request review + merge flow</div>
     </div>
   </div>
 </section>
@@ -1099,21 +1115,22 @@ section {
   const termLines = [
     { text: '<span class="prompt">$</span> <span class="cmd">./scripts/quick_start.sh</span>', delay: 400 },
     { text: '<span class="info">[quick-start]</span> Installing workspace deps...', delay: 600 },
-    { text: '<span class="info">[quick-start]</span> Running DB migration (v2)', delay: 500 },
+    { text: '<span class="info">[quick-start]</span> Running DB migrations (v2 + v3 + v4 + v5)', delay: 500 },
     { text: '<span class="info">[quick-start]</span> Running backend tests', delay: 400 },
     { text: '', delay: 200 },
     { text: '<span class="pass">PASS</span> src/__tests__/auth.test.ts (<span class="num">12</span> tests)', delay: 250 },
     { text: '<span class="pass">PASS</span> src/__tests__/issues.test.ts (<span class="num">20</span> tests)', delay: 200 },
     { text: '<span class="pass">PASS</span> src/__tests__/issue-bounty.test.ts (<span class="num">36</span> tests)', delay: 200 },
-    { text: '<span class="pass">PASS</span> <span class="num">11</span> suites, <span class="num">160</span> tests passed', delay: 400 },
+    { text: '<span class="pass">PASS</span> src/__tests__/security.test.ts (<span class="num">24</span> tests)', delay: 200 },
+    { text: '<span class="pass">PASS</span> <span class="num">12</span> suites, <span class="num">208</span> tests passed', delay: 400 },
     { text: '', delay: 200 },
     { text: '<span class="info">[quick-start]</span> Running frontend tests', delay: 300 },
-    { text: '<span class="pass">PASS</span> <span class="num">4</span> suites, <span class="num">75</span> tests passed', delay: 400 },
+    { text: '<span class="pass">PASS</span> <span class="num">4</span> suites, <span class="num">109</span> tests passed', delay: 400 },
     { text: '', delay: 200 },
     { text: '<span class="info">[quick-start]</span> Running forge tests', delay: 300 },
     { text: '<span class="pass">PASS</span> <span class="num">17</span> tests passed, <span class="num">0</span> failed', delay: 400 },
     { text: '', delay: 200 },
-    { text: '<span class="pass">All <span class="num">252</span> tests green. Servers starting...</span>', delay: 0 },
+    { text: '<span class="pass">All <span class="num">334</span> tests green. Servers starting...</span>', delay: 0 },
   ];
 
   const termBody = document.getElementById('term-body');

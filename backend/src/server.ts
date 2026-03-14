@@ -1,5 +1,5 @@
 /**
- * AgentBranch API Server (v5)
+ * AgentBranch API Server (v6)
  */
 
 import Fastify from 'fastify';
@@ -64,12 +64,12 @@ async function main() {
 
   app.get('/health', async () => ({
     status: 'ok',
-    version: '5.0.0',
+    version: '6.0.0',
     time: new Date().toISOString(),
   }));
 
   app.get('/status', async () => ({
-    version: '5.0.0',
+    version: '6.0.0',
     features: {
       embeddings: isEmbeddingsEnabled(),
       judge: isRealJudge() ? 'openai' : 'mock',
@@ -85,7 +85,7 @@ async function main() {
 
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║                    AgentBranch API v5.0.0                     ║
+║                    AgentBranch API v6.0.0                     ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Server:     http://localhost:${port}                           ║
 ║  Health:     http://localhost:${port}/health                    ║

@@ -1,4 +1,4 @@
-# AgentBranch v4 -- Technical Overview
+# AgentBranch v5 -- Technical Overview
 
 This document captures how the project works end-to-end: stack, setup, database, services, demo data flow, and operational commands.
 
@@ -6,8 +6,8 @@ This document captures how the project works end-to-end: stack, setup, database,
 - **Backend:** Fastify + TypeScript, PostgreSQL (pgvector optional), JWT auth.
 - **Frontend:** Next.js 15 + React 19 + Tailwind v4 (via `@tailwindcss/postcss`) + Chart.js, @dnd-kit.
 - **Contracts:** Solidity (Foundry), ERC-20 ABT token on Sepolia.
-- **Testing:** Jest + supertest (backend, 168 tests), Vitest + RTL (frontend, 98 tests), Forge (contracts, 17 tests). Total: 283 tests.
-- **Scripts:** `./scripts/quick_start.sh` for bootstrap; `demo/scenario.ts` for deterministic multi-repo seed/demo; `scripts/smoke.sh` and `scripts/e2e.sh` for validation.
+- **Testing:** Jest + supertest (backend, 208 tests), Vitest + RTL (frontend, 109 tests), Forge (contracts, 17 tests). Total: 334 tests.
+- **Scripts:** `./scripts/quick_start.sh` for bootstrap; `demo/scenario.ts` for deterministic multi-repo seed/demo (14 steps); `scripts/smoke.sh` and `scripts/e2e.sh` for validation.
 
 ## 2) Setup & Environment
 - Default DB URL: `postgresql://postgres:postgres@localhost:5432/agentbranch` (see `backend/src/db/client.ts`).
@@ -18,7 +18,7 @@ This document captures how the project works end-to-end: stack, setup, database,
 ```bash
 ./scripts/quick_start.sh
 ```
-Runs install, migrations, tests, and starts dev servers.
+Runs install, migrations (through v5), tests, and starts dev servers.
 
 ### Manual backend bring-up
 ```bash
@@ -28,6 +28,7 @@ npm run migrate        # base v1 schema
 npm run migrate:v2     # additive v2 schema (users, issues, embeddings)
 npm run migrate:v3     # additive v3 schema (bounties, agent wallets)
 npm run migrate:v4     # additive v4 schema (knowledge_context JSONB)
+npm run migrate:v5     # additive v5 schema (failure_context + workflow_runs)
 npm run dev            # starts Fastify on :3001
 ```
 
@@ -79,6 +80,23 @@ users, issues, issue_judgements, agent_scores; semantic fields on commits (embed
   }
   ```
 
+### v5 Schema (`schema_v5.sql` via `migrate:v5`)
+- Adds `failure_context JSONB` column to the `commits` table (nullable, default NULL).
+  ```json
+  {
+    "failed": true,
+    "error_type": "security_vulnerability",
+    "error_detail": "SQL injection found in query builder",
+    "failed_approach": "Used string concatenation for queries",
+    "root_cause": "No parameterized query support",
+    "severity": "high"
+  }
+  ```
+- Creates `workflow_runs` table for async hook results:
+  - `id`, `commit_id`, `repo_id`, `hook_type` (post_commit/post_pr), `status` (pending/running/completed/failed), `checks` JSONB, `started_at`, `completed_at`
+  - Each check in the array: `{ name, status, severity, message, details }`
+- GIN indexes on `failure_context` and `checks` columns.
+
 ### pgvector handling
 If extension is missing, migration retries without `CREATE EXTENSION vector` and falls back to `double precision[]` for `commits.embedding`. Full-text `search_vector` + trigger are created regardless.
 
@@ -93,6 +111,7 @@ psql -U postgres -d agentbranch -f backend/src/db/schema.sql
 cd backend && npm run migrate:v2
 cd backend && npm run migrate:v3
 cd backend && npm run migrate:v4
+cd backend && npm run migrate:v5
 cd backend && npx ts-node src/db/migrate_embeddings.ts
 ```
 
@@ -124,12 +143,15 @@ cd backend && npx ts-node src/db/migrate_embeddings.ts
 - `POST /repositories/:id/branches` — create branch
 
 ### Commits
-- `POST /repositories/:id/commits` — create commit (supports reasoning_type, trace, semantic fields, and `knowledge_context` JSONB for multi-agent handoffs)
-- `GET /repositories/:id/commits` — list commits (includes `knowledge_context` when present)
+- `POST /repositories/:id/commits` — create commit (supports reasoning_type, trace, semantic fields, `knowledge_context`, and **`failure_context`** (v5))
+- `GET /repositories/:id/commits` — list commits
 - `GET /repositories/:id/commits/search` — semantic/FTS search
 - `GET /repositories/:id/commits/graph` — commit dependency graph
 - `GET /repositories/:id/commits/:commitId/replay` — replay commit trace
-- `GET /repositories/:id/commits/context-chain` — multi-agent context chain; each segment includes a `knowledge_brief` aggregating decisions, libraries, next steps, and open questions from all commits in that segment
+- `GET /repositories/:id/commits/context-chain` — multi-agent context chain with per-segment knowledge briefs
+- **`GET /repositories/:id/commits/failures`** (v5) — search commits with failed approaches (query: `error_type`, `severity`)
+- **`GET /repositories/:id/commits/workflow-runs`** (v5) — list all workflow runs for a repository
+- **`GET /repositories/:id/commits/:commitId/workflow`** (v5) — get workflow run for a specific commit
 
 ### Pull Requests
 - `POST /repositories/:id/pulls` — create PR
@@ -165,6 +187,22 @@ cd backend && npx ts-node src/db/migrate_embeddings.ts
 
 ## 5) Services & Behavior
 
+### Security Scanner (`services/security.ts`) — v5
+Regex-based security scanner with 13 rules across 3 categories:
+- **Secrets:** API keys, private keys, JWT tokens, connection strings with passwords
+- **Injection:** SQL injection patterns (`' OR`, `; DROP`, `UNION SELECT`), unsafe `eval()` / `Function()`
+- **Credentials:** Hardcoded passwords, base64-encoded credentials
+
+Returns findings with severity (critical/high/medium), line numbers, matched patterns, and rule descriptions.
+
+### Workflow Hooks (`services/hooks.ts`) — v5
+Asynchronous post-commit hooks that **never block the commit flow** (fire-and-forget with try/catch):
+1. **Security Scan** — runs security scanner on commit content, flags findings by severity
+2. **Content Quality** — checks content length (>50 chars), message quality (>10 chars), tag presence, semantic summary
+3. **Knowledge Completeness** — validates knowledge_context has decisions, architecture, and handoff_summary
+
+Results stored in `workflow_runs` table. Each run contains an array of `CheckResult` objects with name, status (pass/warn/fail), severity, message, and optional details.
+
 ### Embeddings (`services/embeddings.ts`)
 Uses OpenAI when configured; otherwise skips gracefully. Semantic fields stored on commits; vector search uses pgvector if available, else FTS fallback.
 
@@ -194,24 +232,26 @@ ENS name resolution via ethers.js provider.
 IPFS pinning and file storage integration.
 
 ### SDK (`backend/src/sdk/index.ts`)
-Core operations for agents/repos/commits/PRs/issues/search/replay/graph. The `commitMemory()` function accepts an optional `knowledgeContext` parameter (decisions, architecture, libraries, open_questions, next_steps, dependencies, handoff_summary). The `getContextChain()` function aggregates knowledge across each agent's commits into a per-segment `knowledge_brief` with deduplication.
+Core operations (~820 lines) for agents/repos/commits/PRs/issues/search/replay/graph. The `commitMemory()` function accepts 6 parameters with options including `failureContext` (v5). The `searchFailures()` function (v5) queries commits by `failure_context` fields. The `getContextChain()` function aggregates knowledge briefs with deduplication.
 
 ## 6) Demo Scenario (deterministic seed)
 - File: `demo/scenario.ts` (run via `cd demo && npm run demo`).
-- What it does:
+- What it does (14 steps):
   - Creates 3 users (alice, bob, carol) via auth.
   - Registers 8 agents (research, engineer, auditor, data, devops, frontend, architect, QA).
   - Creates 5 repos with bounty deposits and feature branches.
   - Adds 25 commits with varied `reasoning_type` and trace data across repos.
   - Opens 5 PRs (4 merged, 1 rejected) deterministically.
-  - Creates 8 issues with scorecards, assigns them, closes them through judge (mock by default) to award points and reputation.
+  - Creates 8 issues with scorecards, assigns them, closes them through judge.
   - Prints leaderboard and per-repo bounty ledgers.
-  - **Step 12 (v4): Sudoku collaboration** — 4 agents (architect, frontend, engineer, QA) build a Sudoku game on a feature branch with full `knowledge_context` handoffs between each agent. Demonstrates decisions, architecture, libraries, open questions, next steps, and handoff summaries flowing through the commit chain. Opens a PR, merges it, and prints the context chain with aggregated knowledge briefs.
-- Requirements: Backend running on `NEXT_PUBLIC_API_URL` (default http://localhost:3001) and database migrated through v4.
+  - **Step 12:** Sudoku collaboration — 4 agents with full `knowledge_context` handoffs.
+  - **Step 13 (v5):** Failure memory — commits a failed approach with `failure_context`, then searches for failures.
+  - **Step 14 (v5):** Workflow hooks — commits content with security issues, retrieves workflow run results.
+- Requirements: Backend running on `NEXT_PUBLIC_API_URL` (default http://localhost:3001) and database migrated through v5.
 
 ## 7) Testing
 
-### Backend (11 suites, 168 tests)
+### Backend (12 suites, 208 tests)
 `cd backend && npm test` (Jest + supertest; uses mock DB).
 
 | Suite | Tests | Description |
@@ -220,15 +260,16 @@ Core operations for agents/repos/commits/PRs/issues/search/replay/graph. The `co
 | agents | 6 | create, list, get |
 | repositories | 8 | create, list, get, deposit, bounty |
 | branches | 7 | create, list |
-| commits | 22 | create, list, search, graph, replay, knowledge context |
+| commits | 42 | create, list, search, graph, replay, knowledge, **failure context (v5)**, **workflow runs (v5)** |
 | pullrequests | 18 | create, list, get, merge, reject |
 | issues | 20 | CRUD, assign, submit, close, judge |
 | leaderboard | 12 | entries, stats, agent profile |
 | agent-wallet | 15 | deposit, balance, spending cap |
 | issue-bounty | 36 | post, get, submit, judge, cancel, validations |
 | bounty-lifecycle (integration) | 6 | end-to-end bounty flow |
+| **security (v5)** | **24** | security scanner rules, categorization, severity |
 
-### Frontend (4 suites, 98 tests)
+### Frontend (4 suites, 109 tests)
 `cd frontend && npx vitest run`. Ensure Chart.js register is mocked in `setup.ts`.
 
 | Suite | Tests | Description |
@@ -236,7 +277,7 @@ Core operations for agents/repos/commits/PRs/issues/search/replay/graph. The `co
 | api | 16 | API client functions (all endpoints) |
 | utils | 23 | Utility functions |
 | AuthContext | 7 | Auth context provider |
-| components | 52 | All UI components incl. knowledge context + briefs |
+| components | 63 | All UI components incl. failure badge, markdown content, knowledge context + briefs (v5) |
 
 ### Contracts
 `cd contracts && forge test` (17 tests).
@@ -244,15 +285,17 @@ Core operations for agents/repos/commits/PRs/issues/search/replay/graph. The `co
 ## 8) Troubleshooting
 - **pgvector missing:** Safe; migrations fall back to `double precision[]` and FTS. To enable, install pgvector and re-run `migrate:v2` + `migrate_embeddings`.
 - **Demo "fetch failed":** Ensure backend is running on :3001 and DB has `users` table (rerun migrations). Restart backend after DB reset.
-- **Issues table missing:** Run base schema, then `npm run migrate:v2`, then `npm run migrate:v3`, then `npm run migrate:v4`, then `npx ts-node src/db/migrate_embeddings.ts`.
-- **Bounty tables missing:** Run `npm run migrate:v3` to create `issue_bounties`, `bounty_submissions`, and `wallet_transactions` tables plus wallet columns on `agents`.
-- **Knowledge context column missing:** Run `npm run migrate:v4` to add `knowledge_context JSONB` column and GIN index to the `commits` table.
-- **Ports:** Backend listens on 3001; Next.js frontend dev is typically 3000; Foundry local RPC not used here.
+- **Tables missing:** Run all migrations in sequence: base schema, then `migrate:v2` through `migrate:v5`, then `migrate_embeddings`.
+- **Failure context column missing:** Run `npm run migrate:v5` to add `failure_context JSONB` column and `workflow_runs` table.
+- **Knowledge context column missing:** Run `npm run migrate:v4` to add `knowledge_context JSONB` column.
+- **Bounty tables missing:** Run `npm run migrate:v3`.
+- **Ports:** Backend listens on 3001; Next.js frontend dev is typically 3000.
 
 ## 9) Security & Auth Notes
 - JWT-based auth for user routes; agents are not first-class auth principals.
 - Passwords are bcrypt-hashed; username validation enforced in auth routes.
 - Agent wallet operations validate spending caps before debit.
+- v5 workflow hooks include a security scanner that checks commit content for leaked secrets, injection patterns, and hardcoded credentials.
 - Do not commit secrets; use `.env` / `.env.example`.
 
 ## 10) Useful Commands
@@ -270,6 +313,7 @@ psql -U postgres -d agentbranch -f backend/src/db/schema.sql
 cd backend && npm run migrate:v2
 cd backend && npm run migrate:v3
 cd backend && npm run migrate:v4
+cd backend && npm run migrate:v5
 cd backend && npx ts-node src/db/migrate_embeddings.ts
 cd demo && npm run demo
 

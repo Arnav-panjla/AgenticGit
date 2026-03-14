@@ -352,14 +352,79 @@ function PodiumCards({ entries }: { entries: LeaderboardEntry[] }) {
   );
 }
 
+/* ── Sortable Header ──────────────────────────────────────────── */
+
+function SortArrow({ active, direction }: { active: boolean; direction: "asc" | "desc" }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="currentColor"
+      style={{
+        opacity: active ? 1 : 0.3,
+        transition: "opacity 0.15s, transform 0.15s",
+        transform: direction === "asc" ? "rotate(180deg)" : "rotate(0deg)",
+      }}
+    >
+      <path d="M6 2L10 7H2L6 2Z" />
+    </svg>
+  );
+}
+
+function SortableHeader({
+  label,
+  column,
+  currentSort,
+  currentOrder,
+  onSort,
+}: {
+  label: string;
+  column: string;
+  currentSort: string;
+  currentOrder: "asc" | "desc";
+  onSort: (column: string) => void;
+}) {
+  const isActive = currentSort === column;
+  return (
+    <th
+      className="text-right px-4 py-3 font-medium select-none"
+      style={{ cursor: "pointer" }}
+      onClick={() => onSort(column)}
+    >
+      <span
+        className="inline-flex items-center gap-1"
+        style={{ color: isActive ? "var(--accent-fg)" : "var(--fg-muted)" }}
+      >
+        {label}
+        <SortArrow active={isActive} direction={isActive ? currentOrder : "desc"} />
+      </span>
+    </th>
+  );
+}
+
 /* ── Leaderboard Page ────────────────────────────────────────── */
+
+type SortColumn = "total_points" | "issues_completed" | "reputation_score" | "code_quality" | "test_pass_rate" | "academic_contribution";
+type SortOrder = "asc" | "desc";
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [stats, setStats] = useState<LeaderboardStats | null>(null);
   const [timeframe, setTimeframe] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<SortColumn>("total_points");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(column as SortColumn);
+      setSortOrder("desc");
+    }
+  };
 
   /* Fetch stats once */
   useEffect(() => {
@@ -371,18 +436,18 @@ export default function LeaderboardPage() {
       });
   }, []);
 
-  /* Fetch entries when timeframe changes */
+  /* Fetch entries when timeframe or sort changes */
   useEffect(() => {
     setLoading(true);
     setError(null);
     leaderboardApi
-      .get(50, 0, timeframe === "all" ? undefined : timeframe)
+      .get(50, 0, timeframe === "all" ? undefined : timeframe, sortBy, sortOrder)
       .then(setEntries)
       .catch((err) =>
         setError(err.message ?? "Failed to load leaderboard")
       )
       .finally(() => setLoading(false));
-  }, [timeframe]);
+  }, [timeframe, sortBy, sortOrder]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -532,7 +597,7 @@ export default function LeaderboardPage() {
           <div className="card overflow-hidden animate-in">
             {/* Table wrapper for horizontal scroll */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: 700 }}>
+              <table className="w-full text-sm" style={{ minWidth: 950 }}>
                 <thead>
                   <tr
                     style={{
@@ -545,15 +610,48 @@ export default function LeaderboardPage() {
                     </th>
                     <th className="text-left px-4 py-3 font-medium">Agent</th>
                     <th className="text-left px-4 py-3 font-medium">Role</th>
-                    <th className="text-right px-4 py-3 font-medium">
-                      Points
-                    </th>
-                    <th className="text-right px-4 py-3 font-medium">
-                      Issues
-                    </th>
-                    <th className="text-right px-4 py-3 font-medium">
-                      Reputation
-                    </th>
+                    <SortableHeader
+                      label="Points"
+                      column="total_points"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Issues"
+                      column="issues_completed"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Reputation"
+                      column="reputation_score"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Code Quality"
+                      column="code_quality"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Test Pass"
+                      column="test_pass_rate"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      label="Academic"
+                      column="academic_contribution"
+                      currentSort={sortBy}
+                      currentOrder={sortOrder}
+                      onSort={handleSort}
+                    />
                     <th className="text-center px-4 py-3 font-medium">
                       Verified
                     </th>
@@ -605,6 +703,24 @@ export default function LeaderboardPage() {
                         style={{ color: "var(--fg-muted)" }}
                       >
                         {entry.reputation_score.toFixed(1)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right"
+                        style={{ color: "var(--fg-muted)" }}
+                      >
+                        {(entry.code_quality ?? 0).toFixed(1)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right"
+                        style={{ color: "var(--fg-muted)" }}
+                      >
+                        {(entry.test_pass_rate ?? 0).toFixed(1)}
+                      </td>
+                      <td
+                        className="px-4 py-3 text-right"
+                        style={{ color: entry.academic_contribution > 0 ? "#60a5fa" : "var(--fg-muted)" }}
+                      >
+                        {(entry.academic_contribution ?? 0).toFixed(1)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex justify-center">

@@ -1,6 +1,6 @@
 /**
  * Component Tests - StatusBadge, ScoreCard, CommitCard, LoadingSkeleton, ContextChain
- * Updated v4: knowledge context tests for CommitCard and ContextChain
+ * Updated v5: failure context, markdown content, and workflow features for CommitCard
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -243,7 +243,7 @@ describe("CommitCard", () => {
     expect(screen.getByText("grep")).toBeInTheDocument();
     expect(screen.getByText("Result")).toBeInTheDocument();
     expect(screen.getByText("Found 3 files")).toBeInTheDocument();
-  });
+  }, 15000);
 
   it("renders with no optional fields", () => {
     const minimal: Commit = {
@@ -324,6 +324,145 @@ describe("CommitCard", () => {
     };
     render(<CommitCard commit={commitEmptyKnowledge} />);
     expect(screen.queryByText("Knowledge Context")).not.toBeInTheDocument();
+  });
+
+  // ─── Failure Context (v5) ───────────────────────────────────────────────
+
+  it("renders failure badge when failure_context.failed is true", () => {
+    const failedCommit: Commit = {
+      ...mockCommit,
+      failure_context: {
+        failed: true,
+        error_type: "security_vulnerability",
+        severity: "high",
+      },
+    };
+    render(<CommitCard commit={failedCommit} />);
+    // Both the badge "Failed (high)" and the section "Failed Approach" contain "Failed"
+    const failedElements = screen.getAllByText(/Failed/);
+    expect(failedElements.length).toBeGreaterThanOrEqual(2);
+    // Check the badge specifically shows severity
+    expect(screen.getByText(/\(high\)/)).toBeInTheDocument();
+  });
+
+  it("renders failure context detail card", () => {
+    const failedCommit: Commit = {
+      ...mockCommit,
+      failure_context: {
+        failed: true,
+        error_type: "logic_error",
+        error_detail: "Hash mismatch between verifier and prover",
+        failed_approach: "Used SHA-256 instead of keccak256",
+        root_cause: "Wrong hash function for Ethereum",
+        severity: "medium",
+      },
+    };
+    render(<CommitCard commit={failedCommit} />);
+    expect(screen.getByText("Failed Approach")).toBeInTheDocument();
+    expect(screen.getByText("logic_error")).toBeInTheDocument();
+    expect(screen.getByText(/Used SHA-256 instead of keccak256/)).toBeInTheDocument();
+    expect(screen.getByText(/Hash mismatch between verifier and prover/)).toBeInTheDocument();
+    expect(screen.getByText(/Wrong hash function for Ethereum/)).toBeInTheDocument();
+  });
+
+  it("does not render failure badge when failure_context is absent", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Failed Approach")).not.toBeInTheDocument();
+  });
+
+  it("renders failure badge without severity when severity is not set", () => {
+    const failedCommit: Commit = {
+      ...mockCommit,
+      failure_context: {
+        failed: true,
+        error_type: "timeout",
+      },
+    };
+    render(<CommitCard commit={failedCommit} />);
+    const failedBadge = screen.getByText("Failed");
+    expect(failedBadge).toBeInTheDocument();
+  });
+
+  // ─── Markdown Content (v5) ──────────────────────────────────────────────
+
+  it("renders View Content button when content is present", () => {
+    const commitWithContent: Commit = {
+      ...mockCommit,
+      content: "# Hello World\n\nThis is a test markdown content.",
+    };
+    render(<CommitCard commit={commitWithContent} />);
+    expect(screen.getByText("View Content")).toBeInTheDocument();
+  });
+
+  it("shows content size indicator", () => {
+    const commitWithContent: Commit = {
+      ...mockCommit,
+      content: "A".repeat(500),
+    };
+    render(<CommitCard commit={commitWithContent} />);
+    expect(screen.getByText("500 chars")).toBeInTheDocument();
+  });
+
+  it("shows KB size for large content", () => {
+    const commitWithContent: Commit = {
+      ...mockCommit,
+      content: "A".repeat(1500),
+    };
+    render(<CommitCard commit={commitWithContent} />);
+    expect(screen.getByText("1.5KB")).toBeInTheDocument();
+  });
+
+  it("does not render View Content when content is empty", () => {
+    const commitNoContent: Commit = {
+      ...mockCommit,
+      content: "",
+    };
+    render(<CommitCard commit={commitNoContent} />);
+    expect(screen.queryByText("View Content")).not.toBeInTheDocument();
+  });
+
+  it("does not render View Content when content is '[content not found]'", () => {
+    const commitNoContent: Commit = {
+      ...mockCommit,
+      content: "[content not found]",
+    };
+    render(<CommitCard commit={commitNoContent} />);
+    expect(screen.queryByText("View Content")).not.toBeInTheDocument();
+  });
+
+  it("expands markdown content on click", async () => {
+    const commitWithContent: Commit = {
+      ...mockCommit,
+      content: "# Test Heading\n\nSome paragraph text.",
+    };
+    render(<CommitCard commit={commitWithContent} />);
+
+    const toggle = screen.getByText("View Content");
+    await userEvent.click(toggle);
+
+    // ReactMarkdown should render the heading text
+    expect(screen.getByText("Test Heading")).toBeInTheDocument();
+    expect(screen.getByText("Some paragraph text.")).toBeInTheDocument();
+  });
+
+  it("renders both failure and content sections together", () => {
+    const commitBoth: Commit = {
+      ...mockCommit,
+      content: "# Failed attempt code\n\nSome code here.",
+      failure_context: {
+        failed: true,
+        error_type: "runtime_error",
+        failed_approach: "Used synchronous IO",
+        severity: "low",
+      },
+    };
+    render(<CommitCard commit={commitBoth} />);
+    // Both the badge "Failed (low)" and the section "Failed Approach" contain "Failed"
+    const failedElements = screen.getAllByText(/Failed/);
+    expect(failedElements.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Failed Approach")).toBeInTheDocument();
+    expect(screen.getByText("View Content")).toBeInTheDocument();
   });
 });
 

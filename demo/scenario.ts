@@ -1,5 +1,5 @@
 /**
- * AgentBranch Demo Scenario v3
+ * AgentBranch Demo Scenario v5
  *
  * Deterministic, multi-repo, multi-agent walkthrough that exercises:
  * - Auth (3 users)
@@ -11,6 +11,8 @@
  * - Leaderboard + repo summaries
  * - Competitive issue bounties (v3)
  * - **Multi-agent collaboration via knowledge handoff** (v4) — Sudoku game scenario
+ * - **Failure memory** — tagging and searching failed approaches (v5)
+ * - **Workflow hooks** — async security scan, quality, and knowledge checks (v5)
  *
  * Run against a live backend (API base from NEXT_PUBLIC_API_URL or http://localhost:3001):
  *   npm run demo
@@ -382,7 +384,7 @@ const issues = [
 
 async function runDemo() {
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
-  console.log('║              AgentBranch — Multi-Repo Demo v3                    ║');
+  console.log('║              AgentBranch — Multi-Repo Demo v5                    ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 
   // Step 1: Register/login users
@@ -1137,6 +1139,217 @@ export function Header() {
     })),
   });
 
+  // ─── Step 13: Failure Memory — Learning from Failed Approaches (v5) ────────
+
+  console.log('\n╔══════════════════════════════════════════════════════════════════╗');
+  console.log('║  Step 13: Failure Memory — Learning from Past Mistakes (v5)       ║');
+  console.log('╚══════════════════════════════════════════════════════════════════╝\n');
+
+  console.log('  Scenario: Agents commit failed approaches so future agents avoid them.');
+  console.log('  This creates institutional memory for the agent team.\n');
+
+  const failureRepoId = repoMap['smart-contract-bridge'].id;
+
+  // 13a: Agent commits a failed approach — reentrancy fix attempt
+  const failedCommit1 = await post(`/repositories/${failureRepoId}/commits`, {
+    branch: 'main',
+    content: `// Attempted fix: add mutex lock before external call
+function unlock(address user) external {
+  require(!locked[user], "Already processing");
+  locked[user] = true;
+  (bool ok, ) = user.call{value: balances[user]}("");
+  require(ok, "Transfer failed");
+  balances[user] = 0;
+  locked[user] = false;
+}
+// Problem: state change (balances[user] = 0) still happens AFTER external call`,
+    message: 'Attempted mutex-based reentrancy fix (failed)',
+    author_ens: 'coding-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'experiment',
+    failure_context: {
+      failed: true,
+      error_type: 'security_vulnerability',
+      error_detail: 'Mutex lock does not prevent reentrancy because state mutation still occurs after external call. The attacker can re-enter during user.call() before balances are zeroed.',
+      failed_approach: 'Added a boolean mutex lock around the withdraw function instead of reordering state mutations',
+      root_cause: 'Violated Checks-Effects-Interactions pattern — external call before state change',
+      severity: 'high',
+    },
+  });
+  log('13a: Failed approach committed', {
+    id: failedCommit1.id,
+    has_failure_context: !!failedCommit1.failure_context,
+  });
+
+  // 13b: Another failure — wrong hashing for merkle proof
+  const failedCommit2 = await post(`/repositories/${failureRepoId}/commits`, {
+    branch: 'main',
+    content: `// Tried SHA-256 for merkle proofs but Ethereum uses keccak256
+function verifyProof(bytes32 root, bytes32[] memory proof, bytes32 leaf) internal pure returns (bool) {
+  bytes32 hash = sha256(abi.encodePacked(leaf));
+  for (uint i = 0; i < proof.length; i++) {
+    hash = sha256(abi.encodePacked(hash, proof[i]));
+  }
+  return hash == root;
+}
+// Fails because the relay nodes use keccak256, not sha256`,
+    message: 'Used SHA-256 instead of keccak256 for merkle proofs (failed)',
+    author_ens: 'audit-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'experiment',
+    failure_context: {
+      failed: true,
+      error_type: 'logic_error',
+      error_detail: 'Used sha256 hash function but the relay protocol computes proofs with keccak256. Hash mismatch causes all proof verifications to fail.',
+      failed_approach: 'Used SHA-256 for merkle proof computation',
+      root_cause: 'Hash function mismatch between verifier and prover — Ethereum ecosystem uses keccak256',
+      severity: 'medium',
+    },
+  });
+  log('13b: Second failure committed', {
+    id: failedCommit2.id,
+    error_type: failedCommit2.failure_context?.error_type,
+  });
+
+  // 13c: Search for failures in the repo
+  const failures = await get(`/repositories/${failureRepoId}/commits/failures`);
+  log('13c: Search all failures', {
+    total: failures.length,
+    failures: failures.map((f: any) => ({
+      message: f.message,
+      error_type: f.failure_context?.error_type,
+      severity: f.failure_context?.severity,
+    })),
+  });
+
+  // 13d: Filter failures by severity
+  const highSeverityFailures = await get(
+    `/repositories/${failureRepoId}/commits/failures?severity=high`
+  );
+  log('13d: High severity failures', {
+    count: highSeverityFailures.length,
+    items: highSeverityFailures.map((f: any) => ({
+      message: f.message,
+      root_cause: f.failure_context?.root_cause,
+    })),
+  });
+
+  // ─── Step 14: Workflow Hooks & Security Scan (v5) ─────────────────────────
+
+  console.log('\n╔══════════════════════════════════════════════════════════════════╗');
+  console.log('║  Step 14: Workflow Hooks & Security Scan (v5)                     ║');
+  console.log('╚══════════════════════════════════════════════════════════════════╝\n');
+
+  console.log('  Every commit now triggers async workflow hooks:');
+  console.log('  - Security scan (regex-based secret/vulnerability detection)');
+  console.log('  - Content quality check');
+  console.log('  - Knowledge completeness check\n');
+
+  // 14a: Commit with intentionally suspicious content (hardcoded secret)
+  const suspiciousCommit = await post(`/repositories/${failureRepoId}/commits`, {
+    branch: 'main',
+    content: `// Config file for bridge deployment
+const BRIDGE_CONFIG = {
+  rpc_url: "https://mainnet.infura.io/v3/abc123",
+  api_key: "sk-proj-AKIA1234567890ABCDEF12345678",
+  deployer: "0x1234567890abcdef",
+};
+// TODO: move secrets to env vars before deploy`,
+    message: 'Add bridge deployment config (needs cleanup)',
+    author_ens: 'devops-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'experiment',
+  });
+  log('14a: Committed suspicious content (hooks run async)', {
+    id: suspiciousCommit.id,
+  });
+
+  // 14b: Wait briefly for async hooks to complete
+  console.log('  Waiting 2s for async workflow hooks to complete...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // 14c: Check workflow runs for the repo
+  const workflowRuns = await get(`/repositories/${failureRepoId}/workflow-runs`);
+  log('14c: Workflow runs for repo', {
+    total: workflowRuns.length,
+    runs: workflowRuns.slice(0, 5).map((r: any) => ({
+      id: r.id,
+      event_type: r.event_type,
+      status: r.status,
+      summary: r.summary,
+      checks: r.checks?.map((c: any) => ({
+        name: c.name,
+        status: c.status,
+        severity: c.severity,
+      })),
+    })),
+  });
+
+  // 14d: Check workflow for the specific suspicious commit
+  try {
+    const commitWorkflow = await get(
+      `/repositories/${failureRepoId}/commits/${suspiciousCommit.id}/workflow`
+    );
+    log('14d: Workflow for suspicious commit', {
+      status: commitWorkflow.status,
+      summary: commitWorkflow.summary,
+      checks: commitWorkflow.checks?.map((c: any) => ({
+        name: c.name,
+        status: c.status,
+        message: c.message,
+        findings_count: c.details?.total_findings,
+      })),
+    });
+  } catch (err: any) {
+    log('14d: Workflow not yet available (async)', { note: 'Hooks may still be running' });
+  }
+
+  // 14e: Commit clean content and verify it passes
+  const cleanCommit = await post(`/repositories/${failureRepoId}/commits`, {
+    branch: 'main',
+    content: `# Bridge Monitoring Runbook
+
+## Health Checks
+1. Verify guardian quorum is responsive
+2. Check rate limiter counters are below threshold
+3. Monitor pending unlock queue depth
+
+## Alert Escalation
+- Warning: queue depth > 50
+- Critical: guardian offline > 5 minutes`,
+    message: 'Add monitoring runbook for bridge operations',
+    author_ens: 'devops-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'knowledge',
+    knowledge_context: {
+      decisions: ['PagerDuty for critical alerts', 'Grafana dashboards for metrics'],
+      next_steps: ['Configure alert thresholds in production'],
+      handoff_summary: 'Monitoring runbook documented. Ready for production setup.',
+    },
+  });
+  log('14e: Clean commit with knowledge context', {
+    id: cleanCommit.id,
+  });
+
+  // Wait for hooks
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  try {
+    const cleanWorkflow = await get(
+      `/repositories/${failureRepoId}/commits/${cleanCommit.id}/workflow`
+    );
+    log('14e: Workflow for clean commit', {
+      status: cleanWorkflow.status,
+      summary: cleanWorkflow.summary,
+      checks: cleanWorkflow.checks?.map((c: any) => ({
+        name: c.name,
+        status: c.status,
+      })),
+    });
+  } catch (err: any) {
+    log('14e: Clean workflow not yet available', { note: 'Hooks may still be running' });
+  }
+
   // ─── Complete ───────────────────────────────────────────────────────────────
 
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
@@ -1144,6 +1357,8 @@ export function Header() {
   console.log('║  - Multi-repo, multi-agent flow (Steps 1-10)                     ║');
   console.log('║  - Competitive bounty lifecycle (Step 11)                         ║');
   console.log('║  - Agent knowledge handoff via commits — Sudoku game (Step 12)    ║');
+  console.log('║  - Failure memory — learning from past mistakes (Step 13) [v5]    ║');
+  console.log('║  - Workflow hooks & security scan (Step 14) [v5]                  ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 }
 

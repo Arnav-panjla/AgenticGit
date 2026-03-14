@@ -1,8 +1,9 @@
 /**
- * Commit Routes Tests (v4)
+ * Commit Routes Tests (v5)
  * 
- * Tests for semantic commits, search, graph, replay, and
- * knowledge context handoff endpoints.
+ * Tests for semantic commits, search, graph, replay,
+ * knowledge context handoff, failure memory, and
+ * workflow run endpoints.
  */
 
 import Fastify, { FastifyInstance } from 'fastify';
@@ -16,9 +17,18 @@ jest.mock('../sdk', () => ({
   getCommitGraph: jest.fn(),
   getCommitReplay: jest.fn(),
   getContextChain: jest.fn(),
+  searchFailures: jest.fn(),
+}));
+
+// Mock hooks service
+jest.mock('../services/hooks', () => ({
+  runCommitHooks: jest.fn().mockResolvedValue(undefined),
+  getWorkflowRuns: jest.fn(),
+  getWorkflowRunForCommit: jest.fn(),
 }));
 
 import * as sdk from '../sdk';
+import * as hooks from '../services/hooks';
 
 describe('Commit Routes', () => {
   let app: FastifyInstance;
@@ -774,6 +784,432 @@ describe('Commit Routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/repos/repo-1/context-chain',
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Database error');
+    });
+  });
+
+  // ─── Failure Memory (v5) ──────────────────────────────────────────────────
+
+  describe('POST /repos/:repoId/commits (with failure_context)', () => {
+    it('should create a commit with failure context', async () => {
+      const mockCommit = {
+        id: 'commit-fail-1',
+        repo_id: 'repo-1',
+        message: 'Attempted mutex fix (failed)',
+        failure_context: {
+          failed: true,
+          error_type: 'security_vulnerability',
+          error_detail: 'Mutex does not prevent reentrancy',
+          failed_approach: 'Boolean mutex lock around withdraw',
+          root_cause: 'Violated CEI pattern',
+          severity: 'high',
+        },
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Failed mutex approach',
+          message: 'Attempted mutex fix (failed)',
+          author_ens: 'agent.eth',
+          failure_context: {
+            failed: true,
+            error_type: 'security_vulnerability',
+            error_detail: 'Mutex does not prevent reentrancy',
+            failed_approach: 'Boolean mutex lock around withdraw',
+            root_cause: 'Violated CEI pattern',
+            severity: 'high',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.failure_context).toBeDefined();
+      expect(body.failure_context.failed).toBe(true);
+      expect(body.failure_context.error_type).toBe('security_vulnerability');
+      expect(body.failure_context.severity).toBe('high');
+    });
+
+    it('should pass failure context to SDK commitMemory', async () => {
+      (sdk.commitMemory as jest.Mock).mockResolvedValue({
+        id: 'commit-fail-2',
+        repo_id: 'repo-1',
+        message: 'Wrong hash function',
+        created_at: new Date().toISOString(),
+      });
+
+      const failureContext = {
+        failed: true,
+        error_type: 'logic_error',
+        failed_approach: 'Used SHA-256 instead of keccak256',
+        severity: 'medium',
+      };
+
+      await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Wrong hash',
+          message: 'Wrong hash function',
+          author_ens: 'audit.eth',
+          failure_context: failureContext,
+        },
+      });
+
+      expect(sdk.commitMemory).toHaveBeenCalledWith(
+        'repo-1',
+        'main',
+        'Wrong hash',
+        'Wrong hash function',
+        'audit.eth',
+        expect.objectContaining({
+          failureContext: expect.objectContaining({
+            failed: true,
+            error_type: 'logic_error',
+            failed_approach: 'Used SHA-256 instead of keccak256',
+            severity: 'medium',
+          }),
+        })
+      );
+    });
+
+    it('should trigger async commit hooks after successful commit', async () => {
+      const mockCommit = {
+        id: 'commit-hook-1',
+        repo_id: 'repo-1',
+        message: 'Test hooks trigger',
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+      (hooks.runCommitHooks as jest.Mock).mockResolvedValue(undefined);
+
+      await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Some content',
+          message: 'Test hooks trigger',
+          author_ens: 'agent.eth',
+        },
+      });
+
+      expect(hooks.runCommitHooks).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoId: 'repo-1',
+          commitId: 'commit-hook-1',
+          content: 'Some content',
+          message: 'Test hooks trigger',
+        })
+      );
+    });
+
+    it('should still return commit even if hooks fail', async () => {
+      const mockCommit = {
+        id: 'commit-hook-fail',
+        repo_id: 'repo-1',
+        message: 'Commit succeeds despite hook failure',
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+      (hooks.runCommitHooks as jest.Mock).mockRejectedValue(new Error('Hook crashed'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Content',
+          message: 'Commit succeeds despite hook failure',
+          author_ens: 'agent.eth',
+        },
+      });
+
+      // The commit itself should succeed — hooks are fire-and-forget
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.id).toBe('commit-hook-fail');
+    });
+
+    it('should handle commit with both failure context and knowledge context', async () => {
+      const mockCommit = {
+        id: 'commit-both',
+        repo_id: 'repo-1',
+        message: 'Failed approach with learnings',
+        failure_context: { failed: true, error_type: 'timeout' },
+        knowledge_context: { decisions: ['Retry with exponential backoff'] },
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Failed but learned',
+          message: 'Failed approach with learnings',
+          author_ens: 'agent.eth',
+          failure_context: { failed: true, error_type: 'timeout' },
+          knowledge_context: { decisions: ['Retry with exponential backoff'] },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.failure_context).toBeDefined();
+      expect(body.knowledge_context).toBeDefined();
+    });
+  });
+
+  describe('GET /repos/:repoId/commits/failures', () => {
+    it('should search failure-tagged commits', async () => {
+      const mockFailures = [
+        {
+          id: 'commit-f1',
+          message: 'Failed attempt 1',
+          failure_context: { failed: true, error_type: 'logic_error', severity: 'medium' },
+        },
+        {
+          id: 'commit-f2',
+          message: 'Failed attempt 2',
+          failure_context: { failed: true, error_type: 'security_vulnerability', severity: 'high' },
+        },
+      ];
+
+      (sdk.searchFailures as jest.Mock).mockResolvedValue(mockFailures);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/failures',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body).toHaveLength(2);
+      expect(sdk.searchFailures).toHaveBeenCalledWith('repo-1', {
+        errorType: undefined,
+        severity: undefined,
+        limit: 20,
+      });
+    });
+
+    it('should filter by error_type', async () => {
+      (sdk.searchFailures as jest.Mock).mockResolvedValue([]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/failures?error_type=logic_error',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(sdk.searchFailures).toHaveBeenCalledWith('repo-1', {
+        errorType: 'logic_error',
+        severity: undefined,
+        limit: 20,
+      });
+    });
+
+    it('should filter by severity', async () => {
+      (sdk.searchFailures as jest.Mock).mockResolvedValue([]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/failures?severity=high',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(sdk.searchFailures).toHaveBeenCalledWith('repo-1', {
+        errorType: undefined,
+        severity: 'high',
+        limit: 20,
+      });
+    });
+
+    it('should respect limit parameter', async () => {
+      (sdk.searchFailures as jest.Mock).mockResolvedValue([]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/failures?limit=5',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(sdk.searchFailures).toHaveBeenCalledWith('repo-1', {
+        errorType: undefined,
+        severity: undefined,
+        limit: 5,
+      });
+    });
+
+    it('should return 400 on SDK error', async () => {
+      (sdk.searchFailures as jest.Mock).mockRejectedValue(
+        new Error('Database error')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/failures',
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Database error');
+    });
+  });
+
+  // ─── Workflow Runs (v5) ───────────────────────────────────────────────────
+
+  describe('GET /repos/:repoId/workflow-runs', () => {
+    it('should return workflow runs for a repo', async () => {
+      const mockRuns = [
+        {
+          id: 'wf-1',
+          repo_id: 'repo-1',
+          commit_id: 'commit-1',
+          event_type: 'commit',
+          status: 'passed',
+          checks: [
+            { name: 'security_scan', status: 'passed', severity: 'info', message: 'No issues' },
+            { name: 'content_quality', status: 'passed', severity: 'info', message: 'OK' },
+          ],
+          summary: '2/2 checks passed',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'wf-2',
+          repo_id: 'repo-1',
+          commit_id: 'commit-2',
+          event_type: 'commit',
+          status: 'warning',
+          checks: [
+            { name: 'security_scan', status: 'warning', severity: 'warning', message: 'Found 1 issue' },
+          ],
+          summary: '0/1 checks passed (warnings)',
+          created_at: new Date().toISOString(),
+        },
+      ];
+
+      (hooks.getWorkflowRuns as jest.Mock).mockResolvedValue(mockRuns);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/workflow-runs',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body).toHaveLength(2);
+      expect(body[0].status).toBe('passed');
+      expect(body[1].status).toBe('warning');
+      expect(hooks.getWorkflowRuns).toHaveBeenCalledWith('repo-1', 50);
+    });
+
+    it('should respect limit parameter', async () => {
+      (hooks.getWorkflowRuns as jest.Mock).mockResolvedValue([]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/workflow-runs?limit=10',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(hooks.getWorkflowRuns).toHaveBeenCalledWith('repo-1', 10);
+    });
+
+    it('should return 400 on error', async () => {
+      (hooks.getWorkflowRuns as jest.Mock).mockRejectedValue(
+        new Error('Database error')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/workflow-runs',
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Database error');
+    });
+  });
+
+  describe('GET /repos/:repoId/commits/:commitId/workflow', () => {
+    it('should return workflow run for a specific commit', async () => {
+      const mockRun = {
+        id: 'wf-3',
+        repo_id: 'repo-1',
+        commit_id: 'commit-123',
+        event_type: 'commit',
+        status: 'failed',
+        checks: [
+          {
+            name: 'security_scan',
+            status: 'failed',
+            severity: 'critical',
+            message: 'Found 2 issues: 2 critical',
+            details: { total_findings: 2 },
+          },
+          {
+            name: 'content_quality',
+            status: 'passed',
+            severity: 'info',
+            message: 'Content quality checks passed',
+          },
+        ],
+        summary: '1/2 checks passed (security issues found)',
+        created_at: new Date().toISOString(),
+      };
+
+      (hooks.getWorkflowRunForCommit as jest.Mock).mockResolvedValue(mockRun);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/commit-123/workflow',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.status).toBe('failed');
+      expect(body.checks).toHaveLength(2);
+      expect(body.checks[0].name).toBe('security_scan');
+      expect(body.checks[0].status).toBe('failed');
+    });
+
+    it('should return 404 if no workflow run exists', async () => {
+      (hooks.getWorkflowRunForCommit as jest.Mock).mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/commit-999/workflow',
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body);
+      expect(body.error).toContain('No workflow run found');
+    });
+
+    it('should return 400 on error', async () => {
+      (hooks.getWorkflowRunForCommit as jest.Mock).mockRejectedValue(
+        new Error('Database error')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/commits/commit-123/workflow',
       });
 
       expect(response.statusCode).toBe(400);

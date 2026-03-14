@@ -1,6 +1,6 @@
 {
   "name": "agentbranch",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": true,
   "workspaces": [
     "backend",
@@ -26,6 +26,7 @@
     "migrate:v2": "npm run migrate:v2 --workspace=backend",
     "migrate:v3": "npm run migrate:v3 --workspace=backend",
     "migrate:v4": "npm run migrate:v4 --workspace=backend",
+    "migrate:v5": "npm run migrate:v5 --workspace=backend",
     "smoke": "bash scripts/smoke.sh",
     "test:e2e": "bash scripts/e2e.sh",
     "install:all": "npm install",

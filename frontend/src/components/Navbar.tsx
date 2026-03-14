@@ -6,7 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Repositories" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/repositories", label: "Repositories" },
   { href: "/agents", label: "Agents" },
   { href: "/leaderboard", label: "Leaderboard" },
 ];
@@ -17,7 +18,7 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string) => {
-    if (href === "/") return pathname === "/";
+    if (href === "/dashboard") return pathname === "/" || pathname === "/dashboard";
     return pathname.startsWith(href);
   };
 
@@ -30,10 +31,14 @@ export function Navbar() {
       }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 group">
+        {/* 3-column grid: logo | centered tabs | auth */}
+        <div
+          className="h-16 items-center hidden md:grid"
+          style={{ gridTemplateColumns: "1fr auto 1fr" }}
+        >
+          {/* Left: Logo */}
+          <div className="flex items-center">
+            <Link href="/dashboard" className="flex items-center gap-2 group">
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="shrink-0">
                 <rect width="32" height="32" rx="8" fill="var(--accent-emphasis)" />
                 <path
@@ -52,53 +57,53 @@ export function Navbar() {
                 />
               </svg>
               <span
-                className="text-lg font-semibold hidden sm:block"
+                className="text-lg font-semibold"
                 style={{ color: "var(--fg-default)" }}
               >
                 AgentBranch
               </span>
             </Link>
-
-            {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-1 ml-4">
-              {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                  style={{
-                    color: isActive(item.href)
-                      ? "var(--fg-on-emphasis)"
-                      : "var(--fg-muted)",
-                    backgroundColor: isActive(item.href)
-                      ? "var(--accent-emphasis)"
-                      : "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive(item.href)) {
-                      e.currentTarget.style.color = "var(--fg-default)";
-                      e.currentTarget.style.backgroundColor = "var(--bg-subtle)";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive(item.href)) {
-                      e.currentTarget.style.color = "var(--fg-muted)";
-                      e.currentTarget.style.backgroundColor = "transparent";
-                    }
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
+          {/* Center: Nav tabs */}
+          <nav className="flex items-center gap-1">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                style={{
+                  color: isActive(item.href)
+                    ? "var(--fg-on-emphasis)"
+                    : "var(--fg-muted)",
+                  backgroundColor: isActive(item.href)
+                    ? "var(--accent-emphasis)"
+                    : "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive(item.href)) {
+                    e.currentTarget.style.color = "var(--fg-default)";
+                    e.currentTarget.style.backgroundColor = "var(--bg-subtle)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive(item.href)) {
+                    e.currentTarget.style.color = "var(--fg-muted)";
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Right: Auth */}
+          <div className="flex items-center justify-end gap-3">
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
                 <span
-                  className="text-sm hidden sm:block"
+                  className="text-sm"
                   style={{ color: "var(--fg-muted)" }}
                 >
                   {user?.username}
@@ -112,10 +117,49 @@ export function Navbar() {
                 Sign in
               </Link>
             )}
+          </div>
+        </div>
 
-            {/* Mobile hamburger */}
+        {/* Mobile: flex layout (logo left, hamburger right) */}
+        <div className="flex h-16 items-center justify-between md:hidden">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" className="shrink-0">
+              <rect width="32" height="32" rx="8" fill="var(--accent-emphasis)" />
+              <path
+                d="M8 16L12 12L16 16L20 12L24 16"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M12 20L16 24L20 20"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span
+              className="text-lg font-semibold"
+              style={{ color: "var(--fg-default)" }}
+            >
+              AgentBranch
+            </span>
+          </Link>
+
+          <div className="flex items-center gap-3">
+            {isAuthenticated ? (
+              <button onClick={logout} className="btn-secondary text-sm">
+                Sign out
+              </button>
+            ) : (
+              <Link href="/login" className="btn-primary text-sm">
+                Sign in
+              </Link>
+            )}
             <button
-              className="md:hidden p-2 rounded-md"
+              className="p-2 rounded-md"
               style={{ color: "var(--fg-muted)" }}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
@@ -139,7 +183,7 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile nav */}
+        {/* Mobile nav dropdown */}
         {mobileOpen && (
           <nav className="md:hidden pb-4 border-t" style={{ borderColor: "var(--border-muted)" }}>
             <div className="flex flex-col gap-1 pt-3">

@@ -7,18 +7,33 @@ import { deposit } from '../services/bounty';
 export async function repositoryRoutes(app: FastifyInstance) {
   // Create repository
   app.post('/', async (req, reply) => {
-    const { name, owner_ens, description, initial_permission } = req.body as any;
+    const { name, owner_ens, description, initial_permission, repo_type, academia_field } = req.body as any;
     if (!name || !owner_ens) return reply.status(400).send({ error: 'name and owner_ens are required' });
     try {
-      const repo = await sdk.createRepository(name, owner_ens, description ?? '', initial_permission ?? 'public');
+      const repo = await sdk.createRepository(
+        name,
+        owner_ens,
+        description ?? '',
+        initial_permission ?? 'public',
+        { repoType: repo_type, academiaField: academia_field }
+      );
       return reply.status(201).send(repo);
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
     }
   });
 
-  // List all repositories (with owner ens + branch count + default permission)
-  app.get('/', async (_req, reply) => {
+  // List all repositories (with owner ens + branch count + type filtering)
+  app.get('/', async (req, reply) => {
+    const { type } = req.query as any;
+
+    let typeFilter = '';
+    const params: any[] = [];
+    if (type && (type === 'general' || type === 'academia')) {
+      params.push(type);
+      typeFilter = `WHERE r.repo_type = $1`;
+    }
+
     const repos = await query(
       `SELECT r.*, a.ens_name as owner_ens,
               (SELECT COUNT(*) FROM branches WHERE repo_id = r.id) as branch_count,
@@ -26,7 +41,9 @@ export async function repositoryRoutes(app: FastifyInstance) {
               (SELECT level FROM permissions WHERE repo_id = r.id AND agent_id IS NULL LIMIT 1) as default_permission
        FROM repositories r
        JOIN agents a ON r.owner_agent_id = a.id
-       ORDER BY r.created_at DESC`
+       ${typeFilter}
+       ORDER BY r.created_at DESC`,
+      params
     );
     return repos;
   });

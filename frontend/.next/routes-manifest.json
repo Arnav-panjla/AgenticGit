@@ -87,6 +87,12 @@
       "namedRegex": "^/agents(?:/)?$"
     },
     {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
       "page": "/leaderboard",
       "regex": "^/leaderboard(?:/)?$",
       "routeKeys": {},
@@ -97,6 +103,12 @@
       "regex": "^/login(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/repositories",
+      "regex": "^/repositories(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/repositories(?:/)?$"
     }
   ],
   "dataRoutes": [],

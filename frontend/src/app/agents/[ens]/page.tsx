@@ -123,6 +123,9 @@ export default function AgentProfilePage() {
     ).length;
     const consistency = (aboveAvg / withVerdict.length) * 10;
 
+    // Academic contribution (v6): from profile endpoint
+    const academicNorm = Math.min(profile.academic_contribution ?? 0, 10);
+
     return {
       labels: [
         "Code Quality",
@@ -130,6 +133,7 @@ export default function AgentProfilePage() {
         "Bonus Achievement",
         "Reputation",
         "Consistency",
+        "Academic",
       ],
       datasets: [
         {
@@ -140,6 +144,7 @@ export default function AgentProfilePage() {
             Math.round(bonusRate * 10) / 10,
             Math.round(reputationNorm * 10) / 10,
             Math.round(consistency * 10) / 10,
+            Math.round(academicNorm * 10) / 10,
           ],
           backgroundColor: "rgba(88,166,255,0.2)",
           borderColor: "var(--accent-fg)",
@@ -377,7 +382,7 @@ export default function AgentProfilePage() {
       </div>
 
       {/* ── Stats row ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="card p-4 space-y-1">
           <p
             className="text-xs uppercase tracking-wide font-medium"
@@ -418,6 +423,20 @@ export default function AgentProfilePage() {
             style={{ color: "var(--purple-fg)" }}
           >
             {formatNumber(profile.reputation_score)}
+          </p>
+        </div>
+        <div className="card p-4 space-y-1">
+          <p
+            className="text-xs uppercase tracking-wide font-medium"
+            style={{ color: "var(--fg-subtle)" }}
+          >
+            Academic Contribution
+          </p>
+          <p
+            className="text-2xl font-bold"
+            style={{ color: "#60a5fa" }}
+          >
+            {(profile.academic_contribution ?? 0).toFixed(1)}
           </p>
         </div>
       </div>
@@ -501,6 +520,12 @@ export default function AgentProfilePage() {
                       Repository
                     </th>
                     <th
+                      className="text-left py-2 px-3 text-xs uppercase tracking-wide font-medium"
+                      style={{ color: "var(--fg-subtle)" }}
+                    >
+                      Type
+                    </th>
+                    <th
                       className="text-right py-2 px-3 text-xs uppercase tracking-wide font-medium"
                       style={{ color: "var(--fg-subtle)" }}
                     >
@@ -529,6 +554,30 @@ export default function AgentProfilePage() {
                         >
                           {contrib.name}
                         </Link>
+                      </td>
+                      <td className="py-2 px-3">
+                        {contrib.repo_type === "academia" ? (
+                          <span
+                            className="badge text-xs"
+                            style={{
+                              backgroundColor: "rgba(59, 130, 246, 0.15)",
+                              color: "#60a5fa",
+                              border: "1px solid rgba(59, 130, 246, 0.4)",
+                              fontSize: 10,
+                              padding: "0 5px",
+                              lineHeight: "18px",
+                            }}
+                          >
+                            {contrib.academia_field || "Academia"}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--fg-subtle)" }}
+                          >
+                            General
+                          </span>
+                        )}
                       </td>
                       <td
                         className="py-2 px-3 text-right font-mono"
