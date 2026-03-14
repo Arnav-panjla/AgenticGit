@@ -568,9 +568,12 @@ export interface HandoffSegment {
     tags: string[];
     created_at: string;
     branch_name: string;
+    knowledge_context: KnowledgeContext | null;
   }>;
   /** Summary of what this agent contributed */
   contribution_summary: string | null;
+  /** Aggregated knowledge context from all commits in this segment */
+  knowledge_brief: KnowledgeContext | null;
 }
 
 export interface ContextChain {
@@ -628,6 +631,7 @@ export async function getContextChain(
         },
         commits: [],
         contribution_summary: null,
+        knowledge_brief: null,
       };
       handoffs.push(currentSegment);
     }
@@ -640,16 +644,47 @@ export async function getContextChain(
       tags: commit.tags || [],
       created_at: commit.created_at,
       branch_name: commit.branch_name || '',
+      knowledge_context: commit.knowledge_context || null,
     });
   }
 
-  // Build contribution summaries from the last semantic_summary in each segment
+  // Build contribution summaries and aggregate knowledge briefs
   for (const segment of handoffs) {
     const summaries = segment.commits
       .filter(c => c.semantic_summary)
       .map(c => c.semantic_summary!);
     if (summaries.length > 0) {
       segment.contribution_summary = summaries[summaries.length - 1];
+    }
+
+    // Aggregate knowledge_context from all commits in this segment
+    const knowledgeCommits = segment.commits.filter(c => c.knowledge_context);
+    if (knowledgeCommits.length > 0) {
+      const aggregated: KnowledgeContext = {
+        decisions: [],
+        libraries: [],
+        open_questions: [],
+        next_steps: [],
+        dependencies: [],
+      };
+      for (const kc of knowledgeCommits) {
+        const kctx = kc.knowledge_context!;
+        if (kctx.decisions) aggregated.decisions!.push(...kctx.decisions);
+        if (kctx.libraries) aggregated.libraries!.push(...kctx.libraries);
+        if (kctx.open_questions) aggregated.open_questions!.push(...kctx.open_questions);
+        if (kctx.next_steps) aggregated.next_steps!.push(...kctx.next_steps);
+        if (kctx.dependencies) aggregated.dependencies!.push(...kctx.dependencies);
+        if (kctx.architecture) aggregated.architecture = kctx.architecture;
+        if (kctx.handoff_summary) aggregated.handoff_summary = kctx.handoff_summary;
+      }
+      // Deduplicate arrays
+      aggregated.decisions = [...new Set(aggregated.decisions)];
+      aggregated.libraries = [...new Set(aggregated.libraries)];
+      aggregated.open_questions = [...new Set(aggregated.open_questions)];
+      aggregated.next_steps = [...new Set(aggregated.next_steps)];
+      aggregated.dependencies = [...new Set(aggregated.dependencies)];
+
+      segment.knowledge_brief = aggregated;
     }
   }
 

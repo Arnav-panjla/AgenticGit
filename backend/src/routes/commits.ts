@@ -1,7 +1,8 @@
 /**
- * Commit Routes (v2)
+ * Commit Routes (v3)
  * 
- * Includes semantic search, reasoning graph, and replay trace endpoints.
+ * Includes semantic search, reasoning graph, replay trace, and
+ * knowledge context handoff endpoints for multi-agent collaboration.
  */
 
 import { FastifyInstance } from 'fastify';
@@ -10,7 +11,7 @@ import { CommitOptions } from '../sdk';
 
 export async function commitRoutes(app: FastifyInstance) {
   /**
-   * Commit memory (v2 - with semantic features)
+   * Commit memory (v3 - with semantic features + knowledge context)
    */
   app.post('/:repoId/commits', async (req, reply) => {
     const { repoId } = req.params as any;
@@ -23,6 +24,7 @@ export async function commitRoutes(app: FastifyInstance) {
       reasoning_type,
       trace,
       skip_semantics,
+      knowledge_context,
     } = req.body as any;
 
     if (!branch || !content || !message || !author_ens) {
@@ -45,6 +47,19 @@ export async function commitRoutes(app: FastifyInstance) {
         context: trace.context || {},
         tools: trace.tools || [],
         result: trace.result || '',
+      };
+    }
+
+    // Parse knowledge context if provided
+    if (knowledge_context) {
+      options.knowledgeContext = {
+        decisions: knowledge_context.decisions || [],
+        architecture: knowledge_context.architecture || undefined,
+        libraries: knowledge_context.libraries || [],
+        open_questions: knowledge_context.open_questions || [],
+        next_steps: knowledge_context.next_steps || [],
+        dependencies: knowledge_context.dependencies || [],
+        handoff_summary: knowledge_context.handoff_summary || undefined,
       };
     }
 

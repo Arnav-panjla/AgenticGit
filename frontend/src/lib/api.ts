@@ -73,6 +73,16 @@ export interface Branch {
   created_at: string;
 }
 
+export interface KnowledgeContext {
+  decisions?: string[];
+  architecture?: string;
+  libraries?: string[];
+  open_questions?: string[];
+  next_steps?: string[];
+  dependencies?: string[];
+  handoff_summary?: string;
+}
+
 export interface Commit {
   id: string;
   repo_id: string;
@@ -89,6 +99,7 @@ export interface Commit {
   trace_context?: Record<string, unknown>;
   trace_tools?: string[];
   trace_result?: string;
+  knowledge_context?: KnowledgeContext;
   parent_commit_id?: string;
   created_at: string;
 }
