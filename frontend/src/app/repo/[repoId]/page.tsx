@@ -15,6 +15,7 @@ import {
   formatNumber,
 } from "@/lib/utils";
 import { CommitCard } from "@/components/CommitCard";
+import { ContextChain } from "@/components/ContextChain";
 import { RepoSectionHeader } from "@/components/RepoSectionHeader";
 
 /* ── Inline SVG icons ──────────────────────────────────────────── */
@@ -563,6 +564,11 @@ export default function RepoDetailPage() {
             &quot;
           </span>
         </div>
+      )}
+
+      {/* ── Agent Context Chain ──────────────────────────────── */}
+      {!searchResults && (
+        <ContextChain repoId={id} branch={selectedBranch ?? undefined} />
       )}
 
       {/* ── Commit List ─────────────────────────────────────── */}

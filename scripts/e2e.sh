@@ -1,13 +1,14 @@
 #!/bin/bash
 #
-# AgentBranch v2 — Full End-to-End Test Orchestrator
+# AgentBranch v3 — Full End-to-End Test Orchestrator
 #
 # Runs all test layers in sequence:
 #   1. Backend unit tests (Jest)
-#   2. Frontend tests (Vitest)
-#   3. Contract tests (Forge)
-#   4. TypeScript compilation check
-#   5. Smoke tests (if server is running)
+#   2. Backend TypeScript compilation check
+#   3. Frontend tests (Vitest)
+#   4. Frontend build check (Next.js)
+#   5. Contract tests (Forge)
+#   6. Smoke tests (if server is running)
 #
 # Usage:
 #   ./scripts/e2e.sh              # run all
@@ -44,14 +45,14 @@ for arg in "$@"; do
   case "$arg" in
     --skip-smoke) SKIP_SMOKE=true ;;
     --only)       NEXT_IS_ONLY=true ;;
-    unit|frontend|contracts|smoke|typecheck)
+    unit|frontend|frontbuild|contracts|smoke|typecheck)
       ONLY="$arg" ;;
   esac
 done
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║       AgentBranch v2 — End-to-End Test Orchestrator             ║${NC}"
+echo -e "${BLUE}║       AgentBranch v3 — End-to-End Test Orchestrator             ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo "Root directory: $ROOT_DIR"
@@ -121,7 +122,19 @@ if should_run "frontend"; then
   fi
 fi
 
-# ─── Step 4: Contract Tests ──────────────────────────────────────────────────
+# ─── Step 4: Frontend Build (Next.js) ────────────────────────────────────────
+
+if should_run "frontbuild"; then
+  if [ -f "$ROOT_DIR/frontend/package.json" ]; then
+    run_step "Frontend build (Next.js)" \
+      "npx next build" \
+      "$ROOT_DIR/frontend"
+  else
+    skip_step "Frontend build" "frontend/package.json not found"
+  fi
+fi
+
+# ─── Step 5: Contract Tests ──────────────────────────────────────────────────
 
 if should_run "contracts"; then
   if command -v forge &>/dev/null && [ -f "$ROOT_DIR/contracts/foundry.toml" ]; then
@@ -133,7 +146,7 @@ if should_run "contracts"; then
   fi
 fi
 
-# ─── Step 5: Smoke Tests ─────────────────────────────────────────────────────
+# ─── Step 6: Smoke Tests ─────────────────────────────────────────────────────
 
 if should_run "smoke" && [ "$SKIP_SMOKE" = false ]; then
   BASE_URL="${BASE_URL:-http://localhost:3001}"

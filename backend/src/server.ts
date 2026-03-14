@@ -64,12 +64,12 @@ async function main() {
 
   app.get('/health', async () => ({
     status: 'ok',
-    version: '2.0.0',
+    version: '3.0.0',
     time: new Date().toISOString(),
   }));
 
   app.get('/status', async () => ({
-    version: '2.0.0',
+    version: '3.0.0',
     features: {
       embeddings: isEmbeddingsEnabled(),
       judge: isRealJudge() ? 'openai' : 'mock',

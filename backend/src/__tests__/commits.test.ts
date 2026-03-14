@@ -14,6 +14,7 @@ jest.mock('../sdk', () => ({
   searchCommits: jest.fn(),
   getCommitGraph: jest.fn(),
   getCommitReplay: jest.fn(),
+  getContextChain: jest.fn(),
 }));
 
 import * as sdk from '../sdk';
@@ -432,6 +433,150 @@ describe('Commit Routes', () => {
       });
 
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  describe('GET /repos/:repoId/context-chain', () => {
+    it('should return context chain with agent handoffs', async () => {
+      const mockChain = {
+        repo_id: 'repo-1',
+        total_commits: 5,
+        total_agents: 3,
+        handoffs: [
+          {
+            agent: { id: 'agent-1', ens_name: 'architect.eth', role: 'architect' },
+            commits: [
+              {
+                id: 'commit-1',
+                message: 'Plan architecture',
+                semantic_summary: 'Designed system architecture for Sudoku game',
+                reasoning_type: 'knowledge',
+                tags: ['architecture', 'planning'],
+                created_at: '2026-01-01T00:00:00Z',
+                branch_name: 'main',
+              },
+              {
+                id: 'commit-2',
+                message: 'Define data structures',
+                semantic_summary: 'Defined grid, cell, and solver interfaces',
+                reasoning_type: 'knowledge',
+                tags: ['data-model'],
+                created_at: '2026-01-01T01:00:00Z',
+                branch_name: 'main',
+              },
+            ],
+            contribution_summary: 'Defined grid, cell, and solver interfaces',
+          },
+          {
+            agent: { id: 'agent-2', ens_name: 'engineer.eth', role: 'engineer' },
+            commits: [
+              {
+                id: 'commit-3',
+                message: 'Implement solver',
+                semantic_summary: 'Implemented backtracking Sudoku solver',
+                reasoning_type: 'experiment',
+                tags: ['implementation', 'solver'],
+                created_at: '2026-01-01T02:00:00Z',
+                branch_name: 'main',
+              },
+            ],
+            contribution_summary: 'Implemented backtracking Sudoku solver',
+          },
+          {
+            agent: { id: 'agent-3', ens_name: 'qa.eth', role: 'qa' },
+            commits: [
+              {
+                id: 'commit-4',
+                message: 'Add unit tests',
+                semantic_summary: 'Added comprehensive test suite for solver',
+                reasoning_type: 'conclusion',
+                tags: ['testing'],
+                created_at: '2026-01-01T03:00:00Z',
+                branch_name: 'main',
+              },
+              {
+                id: 'commit-5',
+                message: 'Edge case tests',
+                semantic_summary: 'Covered empty grid and invalid input edge cases',
+                reasoning_type: 'conclusion',
+                tags: ['testing', 'edge-cases'],
+                created_at: '2026-01-01T04:00:00Z',
+                branch_name: 'main',
+              },
+            ],
+            contribution_summary: 'Covered empty grid and invalid input edge cases',
+          },
+        ],
+      };
+
+      (sdk.getContextChain as jest.Mock).mockResolvedValue(mockChain);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/context-chain',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.repo_id).toBe('repo-1');
+      expect(body.total_commits).toBe(5);
+      expect(body.total_agents).toBe(3);
+      expect(body.handoffs).toHaveLength(3);
+      expect(body.handoffs[0].agent.ens_name).toBe('architect.eth');
+      expect(body.handoffs[0].commits).toHaveLength(2);
+      expect(body.handoffs[1].agent.ens_name).toBe('engineer.eth');
+      expect(body.handoffs[2].agent.ens_name).toBe('qa.eth');
+    });
+
+    it('should pass branch filter to SDK', async () => {
+      (sdk.getContextChain as jest.Mock).mockResolvedValue({
+        repo_id: 'repo-1',
+        total_commits: 0,
+        total_agents: 0,
+        handoffs: [],
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/context-chain?branch=feature',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(sdk.getContextChain).toHaveBeenCalledWith('repo-1', 'feature');
+    });
+
+    it('should return empty chain for repo with no commits', async () => {
+      (sdk.getContextChain as jest.Mock).mockResolvedValue({
+        repo_id: 'repo-1',
+        total_commits: 0,
+        total_agents: 0,
+        handoffs: [],
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/context-chain',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.total_commits).toBe(0);
+      expect(body.handoffs).toHaveLength(0);
+    });
+
+    it('should return 400 on SDK error', async () => {
+      (sdk.getContextChain as jest.Mock).mockRejectedValue(
+        new Error('Database error')
+      );
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/repos/repo-1/context-chain',
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body);
+      expect(body.error).toBe('Database error');
     });
   });
 });

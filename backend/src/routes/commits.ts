@@ -154,4 +154,20 @@ export async function commitRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: e.message });
     }
   });
+
+  /**
+   * Get context chain for a repository (v3)
+   * Shows all commits grouped by agent handoffs — how agents build on each other's work.
+   */
+  app.get('/:repoId/context-chain', async (req, reply) => {
+    const { repoId } = req.params as any;
+    const { branch } = req.query as any;
+
+    try {
+      const chain = await sdk.getContextChain(repoId, branch);
+      return chain;
+    } catch (e: any) {
+      return reply.status(400).send({ error: e.message });
+    }
+  });
 }

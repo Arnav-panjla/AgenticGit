@@ -521,6 +521,122 @@ export async function getCommitReplay(commitId: string): Promise<{
   return { commit, trace, reasoningChain };
 }
 
+// ─── Context Chain (v3) ───────────────────────────────────────────────────────
+
+/**
+ * Agent handoff segment — a sequence of commits by a single agent
+ * before the next agent takes over.
+ */
+export interface HandoffSegment {
+  agent: {
+    id: string;
+    ens_name: string;
+    role: string | null;
+  };
+  commits: Array<{
+    id: string;
+    message: string;
+    semantic_summary: string | null;
+    reasoning_type: string | null;
+    tags: string[];
+    created_at: string;
+    branch_name: string;
+  }>;
+  /** Summary of what this agent contributed */
+  contribution_summary: string | null;
+}
+
+export interface ContextChain {
+  repo_id: string;
+  total_commits: number;
+  total_agents: number;
+  handoffs: HandoffSegment[];
+}
+
+/**
+ * Get the context chain for a repository — all commits ordered chronologically,
+ * grouped by consecutive agent handoffs. This shows how agents build on each
+ * other's knowledge and when control passes between agents.
+ */
+export async function getContextChain(
+  repoId: string,
+  branchName?: string
+): Promise<ContextChain> {
+  let branchFilter = '';
+  const params: any[] = [repoId];
+
+  if (branchName) {
+    const branch = await queryOne<Branch>(
+      'SELECT id FROM branches WHERE repo_id = $1 AND name = $2',
+      [repoId, branchName]
+    );
+    if (branch) {
+      params.push(branch.id);
+      branchFilter = `AND c.branch_id = $${params.length}`;
+    }
+  }
+
+  const commits = await query<Commit & { author_role: string | null }>(
+    `SELECT c.*, a.ens_name as author_ens, a.role as author_role, b.name as branch_name
+     FROM commits c
+     JOIN agents a ON c.author_agent_id = a.id
+     JOIN branches b ON c.branch_id = b.id
+     WHERE c.repo_id = $1 ${branchFilter}
+     ORDER BY c.created_at ASC`,
+    params
+  );
+
+  // Group consecutive commits by the same agent into handoff segments
+  const handoffs: HandoffSegment[] = [];
+  let currentSegment: HandoffSegment | null = null;
+
+  for (const commit of commits) {
+    if (!currentSegment || currentSegment.agent.id !== commit.author_agent_id) {
+      // New agent handoff
+      currentSegment = {
+        agent: {
+          id: commit.author_agent_id,
+          ens_name: commit.author_ens || '',
+          role: (commit as any).author_role || null,
+        },
+        commits: [],
+        contribution_summary: null,
+      };
+      handoffs.push(currentSegment);
+    }
+
+    currentSegment.commits.push({
+      id: commit.id,
+      message: commit.message,
+      semantic_summary: commit.semantic_summary || null,
+      reasoning_type: commit.reasoning_type || null,
+      tags: commit.tags || [],
+      created_at: commit.created_at,
+      branch_name: commit.branch_name || '',
+    });
+  }
+
+  // Build contribution summaries from the last semantic_summary in each segment
+  for (const segment of handoffs) {
+    const summaries = segment.commits
+      .filter(c => c.semantic_summary)
+      .map(c => c.semantic_summary!);
+    if (summaries.length > 0) {
+      segment.contribution_summary = summaries[summaries.length - 1];
+    }
+  }
+
+  // Count unique agents
+  const uniqueAgents = new Set(commits.map(c => c.author_agent_id));
+
+  return {
+    repo_id: repoId,
+    total_commits: commits.length,
+    total_agents: uniqueAgents.size,
+    handoffs,
+  };
+}
+
 // ─── Pull Request ─────────────────────────────────────────────────────────────
 
 export async function openPullRequest(

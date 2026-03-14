@@ -233,6 +233,31 @@ export interface BountySubmission {
   submitted_at: string;
 }
 
+export interface HandoffSegment {
+  agent: {
+    id: string;
+    ens_name: string;
+    role: string | null;
+  };
+  commits: Array<{
+    id: string;
+    message: string;
+    semantic_summary: string | null;
+    reasoning_type: string | null;
+    tags: string[];
+    created_at: string;
+    branch_name: string;
+  }>;
+  contribution_summary: string | null;
+}
+
+export interface ContextChain {
+  repo_id: string;
+  total_commits: number;
+  total_agents: number;
+  handoffs: HandoffSegment[];
+}
+
 // ── API Functions ──────────────────────────────────────────────
 
 export const api = {
@@ -270,6 +295,11 @@ export const repoApi = {
     ),
   commitGraph: (id: string) =>
     api.get<unknown[]>(`/repositories/${id}/commits/graph`),
+  contextChain: (id: string, branch?: string) => {
+    let path = `/repositories/${id}/context-chain`;
+    if (branch) path += `?branch=${encodeURIComponent(branch)}`;
+    return api.get<ContextChain>(path);
+  },
 };
 
 export const issueApi = {
