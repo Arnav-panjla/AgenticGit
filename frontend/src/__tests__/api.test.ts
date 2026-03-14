@@ -168,6 +168,56 @@ describe("API Client", () => {
       expect(result).toEqual(mockRepos);
     });
 
+    it("list fetches repositories filtered by academia type (v6)", async () => {
+      const mockRepos = [
+        { id: "1", name: "ml-research", repo_type: "academia", academia_field: "ML" },
+      ];
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockRepos),
+      });
+
+      const result = await repoApi.list("academia");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/repositories?type=academia"),
+        expect.any(Object)
+      );
+      expect(result).toEqual(mockRepos);
+    });
+
+    it("list fetches repositories filtered by general type (v6)", async () => {
+      const mockRepos = [
+        { id: "2", name: "web-app", repo_type: "general" },
+      ];
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockRepos),
+      });
+
+      const result = await repoApi.list("general");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/repositories?type=general"),
+        expect.any(Object)
+      );
+      expect(result).toEqual(mockRepos);
+    });
+
+    it("list without type filter does not include type param (v6)", async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      await repoApi.list();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.not.stringContaining("type="),
+        expect.any(Object)
+      );
+    });
+
     it("branches fetches repo branches", async () => {
       const mockBranches = [{ id: "1", name: "main" }];
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -262,6 +312,60 @@ describe("API Client", () => {
       expect(result).toEqual(mockLeaderboard);
     });
 
+    it("get passes sort_by and order params (v6)", async () => {
+      const mockEntries = [
+        { rank: 1, ens_name: "a.eth", reputation_score: 200 },
+      ];
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEntries),
+      });
+
+      const result = await leaderboardApi.get(10, 0, "all", "reputation_score", "asc");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("sort_by=reputation_score"),
+        expect.any(Object)
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("order=asc"),
+        expect.any(Object)
+      );
+      expect(result).toEqual(mockEntries);
+    });
+
+    it("get passes sort_by=academic_contribution (v6)", async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      await leaderboardApi.get(50, 0, "all", "academic_contribution", "desc");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("sort_by=academic_contribution"),
+        expect.any(Object)
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("order=desc"),
+        expect.any(Object)
+      );
+    });
+
+    it("get does not include sort_by if not provided (v6)", async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve([]),
+      });
+
+      await leaderboardApi.get(10, 0, "all");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.not.stringContaining("sort_by"),
+        expect.any(Object)
+      );
+    });
+
     it("stats fetches platform statistics", async () => {
       const mockStats = { total_agents: 10, total_points: 1000 };
       (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -276,6 +380,48 @@ describe("API Client", () => {
         expect.any(Object)
       );
       expect(result).toEqual(mockStats);
+    });
+
+    it("stats returns v6 fields (total_repositories, academia_repositories)", async () => {
+      const mockStats = {
+        total_agents: 10,
+        total_points: 5000,
+        total_issues: 30,
+        issues_closed: 25,
+        total_repositories: 7,
+        academia_repositories: 2,
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStats),
+      });
+
+      const result = await leaderboardApi.stats();
+      expect(result.total_repositories).toBe(7);
+      expect(result.academia_repositories).toBe(2);
+    });
+
+    it("agentProfile fetches agent profile (v6)", async () => {
+      const mockProfile = {
+        ens_name: "research.eth",
+        academic_contribution: 7.5,
+        contributions: [
+          { id: "r1", name: "ml-repo", repo_type: "academia", academia_field: "ML" },
+        ],
+      };
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockProfile),
+      });
+
+      const result = await leaderboardApi.agentProfile("research.eth");
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/leaderboard/agents/research.eth"),
+        expect.any(Object)
+      );
+      expect(result.academic_contribution).toBe(7.5);
+      expect(result.contributions[0].repo_type).toBe("academia");
     });
 
     it("get handles wrapped leaderboard response", async () => {

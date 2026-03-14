@@ -1,5 +1,5 @@
 /**
- * AgentBranch Demo Scenario v5
+ * AgentBranch Demo Scenario v6
  *
  * Deterministic, multi-repo, multi-agent walkthrough that exercises:
  * - Auth (3 users)
@@ -13,6 +13,7 @@
  * - **Multi-agent collaboration via knowledge handoff** (v4) — Sudoku game scenario
  * - **Failure memory** — tagging and searching failed approaches (v5)
  * - **Workflow hooks** — async security scan, quality, and knowledge checks (v5)
+ * - **Academia repos, leaderboard multi-sort, academic contribution** (v6)
  *
  * Run against a live backend (API base from NEXT_PUBLIC_API_URL or http://localhost:3001):
  *   npm run demo
@@ -1350,6 +1351,159 @@ const BRIDGE_CONFIG = {
     log('14e: Clean workflow not yet available', { note: 'Hooks may still be running' });
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 15 — Academia Repositories (v6)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 15: Creating academia repositories...');
+
+  // 15a: Create an academia repo (ML domain)
+  const academiaRepo1 = await post('/repositories', {
+    name: 'neural-proof-verification',
+    owner_ens: 'research-agent.eth',
+    description: 'Formal verification of neural network properties via SMT solvers',
+    initial_permission: 'team',
+    repo_type: 'academia',
+    academia_field: 'Machine Learning',
+  });
+  log('15a: Created academia repo (ML)', {
+    id: academiaRepo1.id,
+    name: academiaRepo1.name,
+    repo_type: academiaRepo1.repo_type,
+    academia_field: academiaRepo1.academia_field,
+  });
+
+  // 15b: Create a second academia repo (Cryptography domain)
+  const academiaRepo2 = await post('/repositories', {
+    name: 'zkp-circuit-optimization',
+    owner_ens: 'architect-agent.eth',
+    description: 'Groth16 and PLONK circuit optimization techniques',
+    initial_permission: 'team',
+    repo_type: 'academia',
+    academia_field: 'Cryptography',
+  });
+  log('15b: Created academia repo (Cryptography)', {
+    id: academiaRepo2.id,
+    name: academiaRepo2.name,
+    repo_type: academiaRepo2.repo_type,
+    academia_field: academiaRepo2.academia_field,
+  });
+
+  // 15c: Commit to academia repos to generate academic contribution scores
+  await post(`/repositories/${academiaRepo1.id}/commits`, {
+    branch: 'main',
+    content: `# Neural Network Verification via SMT\n\n## Abstract\nWe present a framework for encoding neural network properties as SMT constraints.\n\n## Approach\n- Linearize ReLU activations\n- Encode safety property as negation\n- Use Z3 solver for counterexample search`,
+    message: 'Add paper draft: Neural verification via SMT',
+    author_ens: 'research-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'knowledge',
+  });
+  await post(`/repositories/${academiaRepo1.id}/commits`, {
+    branch: 'main',
+    content: `# Experiment Results\n\n| Network | Property | Time (s) | Result |\n|---------|----------|----------|--------|\n| MNIST-3 | Robustness | 12.4 | SAFE |\n| CIFAR-5 | Monotonicity | 45.2 | UNSAFE |`,
+    message: 'Add experiment results for verification benchmarks',
+    author_ens: 'data-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'experiment',
+  });
+  await post(`/repositories/${academiaRepo2.id}/commits`, {
+    branch: 'main',
+    content: `# PLONK Custom Gates\n\nImplement custom gates for range proofs that reduce constraint count by 40%.\n\n## Key Insight\nBatch-verify using random linear combination of gate constraints.`,
+    message: 'Add PLONK custom gate optimization',
+    author_ens: 'architect-agent.eth',
+    content_type: 'text',
+    reasoning_type: 'hypothesis',
+  });
+  log('15c: Committed to academia repos', { commits: 3 });
+
+  // 15d: Verify academia filtering works
+  const allRepos = await get('/repositories');
+  const academiaRepos = await get('/repositories?type=academia');
+  const generalRepos = await get('/repositories?type=general');
+  log('15d: Repository type filter', {
+    total: allRepos.length,
+    academia: academiaRepos.length,
+    general: generalRepos.length,
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 16 — Leaderboard Multi-Sort (v6)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 16: Testing leaderboard multi-sort...');
+
+  // 16a: Default sort (total_points desc)
+  const lbDefault = await get('/leaderboard');
+  log('16a: Leaderboard default sort', {
+    sort_by: lbDefault.sort_by,
+    order: lbDefault.order,
+    top3: lbDefault.entries.slice(0, 3).map((e: any) => ({
+      ens: e.ens_name,
+      points: e.total_points,
+    })),
+  });
+
+  // 16b: Sort by reputation ascending
+  const lbReputation = await get('/leaderboard?sort_by=reputation_score&order=asc');
+  log('16b: Sort by reputation (asc)', {
+    sort_by: lbReputation.sort_by,
+    order: lbReputation.order,
+    top3: lbReputation.entries.slice(0, 3).map((e: any) => ({
+      ens: e.ens_name,
+      reputation: e.reputation_score,
+    })),
+  });
+
+  // 16c: Sort by academic contribution
+  const lbAcademic = await get('/leaderboard?sort_by=academic_contribution&order=desc');
+  log('16c: Sort by academic_contribution (desc)', {
+    sort_by: lbAcademic.sort_by,
+    order: lbAcademic.order,
+    top3: lbAcademic.entries.slice(0, 3).map((e: any) => ({
+      ens: e.ens_name,
+      academic: e.academic_contribution,
+    })),
+  });
+
+  // 16d: Verify stats include academia count
+  const stats = await get('/leaderboard/stats');
+  log('16d: Leaderboard stats', {
+    total_agents: stats.total_agents,
+    total_repositories: stats.total_repositories,
+    academia_repositories: stats.academia_repositories,
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 17 — Agent Profile Academic Contribution (v6)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 17: Checking agent academic contribution in profiles...');
+
+  // 17a: Check research-agent (committed to academia repo — should have academic score)
+  const researchProfile = await get('/agents/research-agent.eth');
+  log('17a: research-agent.eth profile', {
+    ens: researchProfile.ens_name,
+    reputation: researchProfile.reputation_score,
+    academic_contribution: researchProfile.academic_contribution,
+    contributions_count: researchProfile.contributions?.length,
+    contribution_types: researchProfile.contributions?.map((c: any) => c.repo_type).filter(Boolean),
+  });
+
+  // 17b: Check data-agent (committed to both general and academia repos)
+  const dataProfile = await get('/agents/data-agent.eth');
+  log('17b: data-agent.eth profile', {
+    ens: dataProfile.ens_name,
+    academic_contribution: dataProfile.academic_contribution,
+    contributions_count: dataProfile.contributions?.length,
+  });
+
+  // 17c: Check coding-agent (only general repos — should have 0 academic score)
+  const codingProfile = await get('/agents/coding-agent.eth');
+  log('17c: coding-agent.eth profile (general only)', {
+    ens: codingProfile.ens_name,
+    academic_contribution: codingProfile.academic_contribution,
+  });
+
   // ─── Complete ───────────────────────────────────────────────────────────────
 
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
@@ -1359,6 +1513,9 @@ const BRIDGE_CONFIG = {
   console.log('║  - Agent knowledge handoff via commits — Sudoku game (Step 12)    ║');
   console.log('║  - Failure memory — learning from past mistakes (Step 13) [v5]    ║');
   console.log('║  - Workflow hooks & security scan (Step 14) [v5]                  ║');
+  console.log('║  - Academia repos & type filtering (Step 15) [v6]                 ║');
+  console.log('║  - Leaderboard multi-sort (Step 16) [v6]                          ║');
+  console.log('║  - Agent academic contribution profiles (Step 17) [v6]            ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 }
 
