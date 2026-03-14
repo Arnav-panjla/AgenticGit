@@ -1,183 +1,287 @@
 /**
- * Component Tests - ScoreCard & JudgeVerdict
+ * Component Tests - StatusBadge, ScoreCard, CommitCard, LoadingSkeleton
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { ScoreCard } from '../components/ScoreCard';
-import { JudgeVerdict } from '../components/JudgeVerdict';
-import type { Scorecard, Judgement } from '../api';
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { StatusBadge } from "@/components/StatusBadge";
+import { ScoreCard } from "@/components/ScoreCard";
+import { CommitCard } from "@/components/CommitCard";
+import {
+  CardSkeleton,
+  TableSkeleton,
+  PageSkeleton,
+} from "@/components/LoadingSkeleton";
+import type { Scorecard, Commit } from "@/lib/api";
 
-describe('ScoreCard', () => {
-  const mockScorecard: Scorecard = {
-    difficulty: 'medium',
-    base_points: 100,
-    unit_tests: ['test_auth', 'test_api'],
-    bonus_criteria: ['coverage > 90%', 'no lint errors'],
-    bonus_points_per_criterion: 25,
-    time_limit_hours: 48,
-    required_language: 'TypeScript',
-  };
+/* ── StatusBadge ──────────────────────────────────────────────── */
 
-  describe('compact mode', () => {
-    it('renders difficulty badge and points', () => {
-      render(<ScoreCard scorecard={mockScorecard} compact />);
-
-      expect(screen.getByText('medium')).toBeInTheDocument();
-      expect(screen.getByText('100 pts')).toBeInTheDocument();
-    });
+describe("StatusBadge", () => {
+  it("renders status text with title case", () => {
+    render(<StatusBadge status="open" />);
+    expect(screen.getByText("Open")).toBeInTheDocument();
   });
 
-  describe('full mode', () => {
-    it('renders all scorecard information', () => {
-      render(<ScoreCard scorecard={mockScorecard} />);
-
-      expect(screen.getByText('Scoring')).toBeInTheDocument();
-      expect(screen.getByText('medium')).toBeInTheDocument();
-      expect(screen.getByText('100')).toBeInTheDocument();
-      expect(screen.getByText('+50')).toBeInTheDocument(); // max bonus
-      expect(screen.getByText('150')).toBeInTheDocument(); // max total
-    });
-
-    it('renders time limit', () => {
-      render(<ScoreCard scorecard={mockScorecard} />);
-
-      expect(screen.getByText('48h time limit')).toBeInTheDocument();
-    });
-
-    it('renders unit tests', () => {
-      render(<ScoreCard scorecard={mockScorecard} />);
-
-      expect(screen.getByText('Required Tests')).toBeInTheDocument();
-      expect(screen.getByText('test_auth')).toBeInTheDocument();
-      expect(screen.getByText('test_api')).toBeInTheDocument();
-    });
-
-    it('renders bonus criteria with points', () => {
-      render(<ScoreCard scorecard={mockScorecard} />);
-
-      expect(screen.getByText('Bonus Criteria')).toBeInTheDocument();
-      expect(screen.getByText('+25 coverage > 90%')).toBeInTheDocument();
-      expect(screen.getByText('+25 no lint errors')).toBeInTheDocument();
-    });
-
-    it('renders required language', () => {
-      render(<ScoreCard scorecard={mockScorecard} />);
-
-      expect(screen.getByText('TypeScript')).toBeInTheDocument();
-    });
+  it("converts underscores to spaces and title-cases", () => {
+    render(<StatusBadge status="in_progress" />);
+    expect(screen.getByText("In Progress")).toBeInTheDocument();
   });
 
-  describe('difficulty colors', () => {
-    it('applies correct color for each difficulty', () => {
-      const difficulties: Array<'easy' | 'medium' | 'hard' | 'expert'> = ['easy', 'medium', 'hard', 'expert'];
+  it("renders with small size", () => {
+    const { container } = render(<StatusBadge status="closed" size="sm" />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain("text-xs");
+  });
 
-      difficulties.forEach(difficulty => {
-        const { unmount } = render(
-          <ScoreCard scorecard={{ ...mockScorecard, difficulty }} compact />
-        );
-        expect(screen.getByText(difficulty)).toBeInTheDocument();
-        unmount();
-      });
+  it("renders all status types without error", () => {
+    const statuses = [
+      "open",
+      "in_progress",
+      "closed",
+      "cancelled",
+      "merged",
+      "rejected",
+      "approved",
+    ];
+    statuses.forEach((status) => {
+      const { unmount } = render(<StatusBadge status={status} />);
+      const label = status
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      expect(screen.getByText(label)).toBeInTheDocument();
+      unmount();
     });
   });
 });
 
-describe('JudgeVerdict', () => {
-  const mockJudgement: Judgement = {
-    id: 'j1',
-    issue_id: 'i1',
-    agent_id: 'a1',
-    agent_ens: 'solver-agent.eth',
-    verdict: {
-      passed_tests: ['test_auth', 'test_api'],
-      failed_tests: ['test_edge_case'],
-      bonus_achieved: ['coverage > 90%'],
-      bonus_missed: ['no lint errors'],
-      code_quality_score: 8,
-      reasoning: 'Good implementation with minor issues.',
-      suggestions: ['Consider adding more edge case tests', 'Refactor the main function'],
-    },
-    points_awarded: 125,
-    judged_at: '2024-01-15T10:00:00Z',
+/* ── ScoreCard ────────────────────────────────────────────────── */
+
+describe("ScoreCard", () => {
+  const mockScorecard: Scorecard = {
+    difficulty: "medium",
+    base_points: 100,
+    unit_tests: [
+      { name: "test_auth", points: 30 },
+      { name: "test_api", points: 20 },
+    ],
+    bonus_criteria: ["coverage > 90%", "no lint errors"],
+    bonus_points_per_criterion: 25,
+    time_limit_hours: 48,
+    required_language: "TypeScript",
+    importance: "P1",
   };
 
-  it('renders points awarded', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
+  describe("compact mode", () => {
+    it("renders difficulty and points", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="compact" />);
+      expect(screen.getByText("medium")).toBeInTheDocument();
+      expect(screen.getByText("100 pts")).toBeInTheDocument();
+    });
 
-    expect(screen.getByText('125')).toBeInTheDocument();
-    expect(screen.getByText('points')).toBeInTheDocument();
+    it("shows correct difficulty for each level", () => {
+      const difficulties: Array<
+        "easy" | "medium" | "hard" | "expert"
+      > = ["easy", "medium", "hard", "expert"];
+
+      difficulties.forEach((d) => {
+        const { unmount } = render(
+          <ScoreCard scorecard={{ ...mockScorecard, difficulty: d }} mode="compact" />
+        );
+        expect(screen.getByText(d)).toBeInTheDocument();
+        unmount();
+      });
+    });
   });
 
-  it('renders agent ENS', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
+  describe("full mode", () => {
+    it("renders scorecard header", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Scorecard")).toBeInTheDocument();
+    });
 
-    expect(screen.getByText('by solver-agent.eth')).toBeInTheDocument();
+    it("renders base points", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("100")).toBeInTheDocument();
+      expect(screen.getByText("base points")).toBeInTheDocument();
+    });
+
+    it("renders max points when bonus exists", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      // max = 100 + 2 * 25 = 150
+      expect(screen.getByText("150")).toBeInTheDocument();
+      expect(screen.getByText("max")).toBeInTheDocument();
+    });
+
+    it("renders time limit", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Time Limit")).toBeInTheDocument();
+      expect(screen.getByText("48h")).toBeInTheDocument();
+    });
+
+    it("renders required language", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Language")).toBeInTheDocument();
+      expect(screen.getByText("TypeScript")).toBeInTheDocument();
+    });
+
+    it("renders importance/priority", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Priority")).toBeInTheDocument();
+      expect(screen.getByText("P1")).toBeInTheDocument();
+    });
+
+    it("renders unit tests", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Unit Tests (2)")).toBeInTheDocument();
+      expect(screen.getByText("test_auth")).toBeInTheDocument();
+      expect(screen.getByText("test_api")).toBeInTheDocument();
+    });
+
+    it("renders bonus criteria", () => {
+      render(<ScoreCard scorecard={mockScorecard} mode="full" />);
+      expect(screen.getByText("Bonus Criteria")).toBeInTheDocument();
+      expect(screen.getByText("coverage > 90%")).toBeInTheDocument();
+      expect(screen.getByText("no lint errors")).toBeInTheDocument();
+      expect(screen.getByText("+25 pts each")).toBeInTheDocument();
+    });
+  });
+});
+
+/* ── CommitCard ───────────────────────────────────────────────── */
+
+describe("CommitCard", () => {
+  const mockCommit: Commit = {
+    id: "c1",
+    repo_id: "r1",
+    branch_id: "b1",
+    message: "Add authentication module",
+    author_ens: "alpha.eth",
+    branch_name: "main",
+    semantic_summary: "Implements JWT-based auth with refresh tokens",
+    tags: ["auth", "security"],
+    reasoning_type: "knowledge",
+    created_at: new Date().toISOString(),
+  };
+
+  it("renders commit message", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(
+      screen.getByText("Add authentication module")
+    ).toBeInTheDocument();
   });
 
-  it('renders code quality score', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Code Quality')).toBeInTheDocument();
-    expect(screen.getByText('8/10')).toBeInTheDocument();
+  it("renders author ENS as a link", () => {
+    render(<CommitCard commit={mockCommit} />);
+    const link = screen.getByText("alpha.eth");
+    expect(link).toBeInTheDocument();
+    expect(link.closest("a")).toHaveAttribute("href", "/agents/alpha.eth");
   });
 
-  it('renders passed tests', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Passed Tests')).toBeInTheDocument();
-    expect(screen.getByText('test_auth')).toBeInTheDocument();
-    expect(screen.getByText('test_api')).toBeInTheDocument();
+  it("renders branch name", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.getByText("main")).toBeInTheDocument();
   });
 
-  it('renders failed tests', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Failed Tests')).toBeInTheDocument();
-    expect(screen.getByText('test_edge_case')).toBeInTheDocument();
+  it("renders semantic summary", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(
+      screen.getByText("Implements JWT-based auth with refresh tokens")
+    ).toBeInTheDocument();
   });
 
-  it('renders bonus achievements', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Bonus Achieved')).toBeInTheDocument();
-    expect(screen.getByText('coverage > 90%')).toBeInTheDocument();
+  it("renders tags", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.getByText("auth")).toBeInTheDocument();
+    expect(screen.getByText("security")).toBeInTheDocument();
   });
 
-  it('renders missed bonuses', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Bonus Missed')).toBeInTheDocument();
-    expect(screen.getByText('no lint errors')).toBeInTheDocument();
+  it("renders reasoning type badge", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.getByText("Knowledge")).toBeInTheDocument();
   });
 
-  it('renders reasoning', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Judge Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Good implementation with minor issues.')).toBeInTheDocument();
+  it("renders relative time", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.getByText("just now")).toBeInTheDocument();
   });
 
-  it('renders suggestions', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    expect(screen.getByText('Suggestions')).toBeInTheDocument();
-    expect(screen.getByText('Consider adding more edge case tests')).toBeInTheDocument();
-    expect(screen.getByText('Refactor the main function')).toBeInTheDocument();
+  it("does not render trace section when no trace data", () => {
+    render(<CommitCard commit={mockCommit} />);
+    expect(screen.queryByText("Trace Data")).not.toBeInTheDocument();
   });
 
-  it('shows success styling for positive points', () => {
-    render(<JudgeVerdict judgement={mockJudgement} />);
-
-    const container = screen.getByTestId('judge-verdict');
-    expect(container?.className).toContain('border-green-500');
+  it("renders trace toggle when trace data exists", () => {
+    const commitWithTrace: Commit = {
+      ...mockCommit,
+      trace_prompt: "Analyze the codebase",
+      trace_tools: ["grep", "read"],
+      trace_result: "Found 3 files",
+    };
+    render(<CommitCard commit={commitWithTrace} />);
+    expect(screen.getByText("Trace Data")).toBeInTheDocument();
+    expect(screen.getByText("2 tools")).toBeInTheDocument();
   });
 
-  it('shows failure styling for zero points', () => {
-    const failedJudgement = { ...mockJudgement, points_awarded: 0 };
-    render(<JudgeVerdict judgement={failedJudgement} />);
+  it("expands trace data on click", async () => {
+    const commitWithTrace: Commit = {
+      ...mockCommit,
+      trace_prompt: "Analyze the codebase",
+      trace_tools: ["grep"],
+      trace_result: "Found 3 files",
+    };
+    render(<CommitCard commit={commitWithTrace} />);
 
-    const container = screen.getByTestId('judge-verdict');
-    expect(container?.className).toContain('border-red-500');
+    const toggle = screen.getByText("Trace Data");
+    await userEvent.click(toggle);
+
+    expect(screen.getByText("Prompt")).toBeInTheDocument();
+    expect(screen.getByText("Analyze the codebase")).toBeInTheDocument();
+    expect(screen.getByText("Tools Used")).toBeInTheDocument();
+    expect(screen.getByText("grep")).toBeInTheDocument();
+    expect(screen.getByText("Result")).toBeInTheDocument();
+    expect(screen.getByText("Found 3 files")).toBeInTheDocument();
+  });
+
+  it("renders with no optional fields", () => {
+    const minimal: Commit = {
+      id: "c2",
+      repo_id: "r1",
+      branch_id: "b1",
+      message: "Simple commit",
+      created_at: new Date().toISOString(),
+    };
+    render(<CommitCard commit={minimal} />);
+    expect(screen.getByText("Simple commit")).toBeInTheDocument();
+  });
+});
+
+/* ── LoadingSkeleton ──────────────────────────────────────────── */
+
+describe("LoadingSkeleton", () => {
+  it("renders CardSkeleton", () => {
+    const { container } = render(<CardSkeleton />);
+    const skeletons = container.querySelectorAll(".skeleton");
+    expect(skeletons.length).toBeGreaterThan(0);
+  });
+
+  it("renders TableSkeleton with default rows/columns", () => {
+    const { container } = render(<TableSkeleton />);
+    const skeletons = container.querySelectorAll(".skeleton");
+    // 4 header cells + 5 rows * 4 cols = 24
+    expect(skeletons.length).toBe(24);
+  });
+
+  it("renders TableSkeleton with custom rows/columns", () => {
+    const { container } = render(<TableSkeleton rows={3} columns={2} />);
+    const skeletons = container.querySelectorAll(".skeleton");
+    // 2 header + 3 * 2 = 8
+    expect(skeletons.length).toBe(8);
+  });
+
+  it("renders PageSkeleton with cards", () => {
+    const { container } = render(<PageSkeleton />);
+    const cards = container.querySelectorAll(".card");
+    expect(cards.length).toBe(6); // 6 CardSkeleton instances
   });
 });

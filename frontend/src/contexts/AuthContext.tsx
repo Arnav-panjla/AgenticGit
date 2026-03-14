@@ -1,62 +1,57 @@
-/**
- * AuthContext - Authentication state management
- * 
- * Provides login, logout, registration, and token management.
- */
+"use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../api';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { authApi, type Agent } from "@/lib/api";
 
-interface User {
-  id: string;
-  username: string;
-  agents?: { id: string; ens_name: string }[];
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
+interface AuthState {
   isAuthenticated: boolean;
+  isLoading: boolean;
+  user: { id: string; username: string } | null;
+  agents: Agent[];
+  selectedAgent: Agent | null;
+  token: string | null;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  getCurrentAgentEns: () => string | null;
-  setCurrentAgent: (ens: string) => void;
+  selectAgent: (agent: Agent) => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
-
-const TOKEN_KEY = 'agentbranch_token';
-const USER_KEY = 'agentbranch_user';
-const AGENT_KEY = 'agentbranch_current_agent';
+const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<{ id: string; username: string } | null>(
+    null
+  );
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load stored auth on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
-    const storedUser = localStorage.getItem(USER_KEY);
-    
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      
-      // Verify token is still valid
-      api.get<{ user: User }>('/auth/me')
-        .then(data => {
+    const stored = localStorage.getItem("ab_token");
+    if (stored) {
+      setToken(stored);
+      authApi
+        .me()
+        .then((data) => {
           setUser(data.user);
-          localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+          setAgents(data.agents ?? []);
+          if (data.agents?.length) {
+            const savedEns = localStorage.getItem("ab_selected_agent");
+            const found = data.agents.find((a) => a.ens_name === savedEns);
+            setSelectedAgent(found ?? data.agents[0]);
+          }
         })
         .catch(() => {
-          // Token expired - clear auth
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
+          localStorage.removeItem("ab_token");
           setToken(null);
-          setUser(null);
         })
         .finally(() => setIsLoading(false));
     } else {
@@ -64,58 +59,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const data = await api.post<{ token: string; user: User }>('/auth/login', {
-      username,
-      password,
-    });
-    
+  const login = useCallback(async (username: string, password: string) => {
+    const data = await authApi.login(username, password);
+    localStorage.setItem("ab_token", data.token);
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-  };
+    // Fetch agents after login
+    try {
+      const me = await authApi.me();
+      setAgents(me.agents ?? []);
+      if (me.agents?.length) setSelectedAgent(me.agents[0]);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
-  const register = async (username: string, password: string) => {
-    const data = await api.post<{ token: string; user: User }>('/auth/register', {
-      username,
-      password,
-    });
-    
+  const register = useCallback(async (username: string, password: string) => {
+    const data = await authApi.register(username, password);
+    localStorage.setItem("ab_token", data.token);
     setToken(data.token);
     setUser(data.user);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    localStorage.removeItem("ab_token");
+    localStorage.removeItem("ab_selected_agent");
     setToken(null);
     setUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(AGENT_KEY);
-  };
+    setAgents([]);
+    setSelectedAgent(null);
+  }, []);
 
-  const getCurrentAgentEns = (): string | null => {
-    return localStorage.getItem(AGENT_KEY);
-  };
-
-  const setCurrentAgent = (ens: string) => {
-    localStorage.setItem(AGENT_KEY, ens);
-  };
+  const selectAgent = useCallback((agent: Agent) => {
+    setSelectedAgent(agent);
+    localStorage.setItem("ab_selected_agent", agent.ens_name);
+  }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        token,
-        isLoading,
         isAuthenticated: !!token,
+        isLoading,
+        user,
+        agents,
+        selectedAgent,
+        token,
         login,
         register,
         logout,
-        getCurrentAgentEns,
-        setCurrentAgent,
+        selectAgent,
       }}
     >
       {children}
@@ -124,14 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
-
-// Helper to get current agent ENS (can be used outside React components)
-export function getCurrentAgentEns(): string | null {
-  return localStorage.getItem(AGENT_KEY);
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

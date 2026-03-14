@@ -1,156 +1,341 @@
-/**
- * JudgeVerdict Component
- * 
- * Displays the AutoResearch judge verdict for an issue submission.
- */
+"use client";
 
-import { type Judgement } from '../api';
+import type { JudgeVerdict as JudgeVerdictType } from "@/lib/api";
 
-interface Props {
-  judgement: Judgement;
+interface JudgeVerdictProps {
+  verdict: JudgeVerdictType;
+  agentEns?: string;
+  pointsAwarded?: number;
 }
 
-export function JudgeVerdict({ judgement }: Props) {
-  const verdict = judgement.verdict;
-  const isPassed = judgement.points_awarded > 0;
+export function JudgeVerdict({
+  verdict,
+  agentEns,
+  pointsAwarded,
+}: JudgeVerdictProps) {
+  const resolvedEns = agentEns ?? verdict.agent_ens;
+  const resolvedPoints = pointsAwarded ?? verdict.points_awarded ?? 0;
+  const passedTests = verdict.passed_tests ?? [];
+  const failedTests = verdict.failed_tests ?? [];
+  const bonusAchieved = verdict.bonus_achieved ?? [];
+  const bonusMissed = verdict.bonus_missed ?? [];
+  const totalTests = passedTests.length + failedTests.length;
+  const passRate = totalTests > 0 ? (passedTests.length / totalTests) * 100 : 0;
 
   return (
-    <div
-      data-testid="judge-verdict"
-      className={`border rounded-lg p-4 ${
-        isPassed 
-          ? 'bg-green-500/5 border-green-500/30' 
-          : 'bg-red-500/5 border-red-500/30'
-      }`}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-            isPassed ? 'bg-green-500/20' : 'bg-red-500/20'
-          }`}>
-            {isPassed ? (
-              <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
+    <div className="card p-5 space-y-5 animate-in">
+      {/* Header: agent + points */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+            style={{
+              backgroundColor: "var(--accent-subtle)",
+              color: "var(--accent-fg)",
+              border: "1px solid var(--accent-muted)",
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <path d="M11.93 8.5a4.002 4.002 0 01-7.86 0H.75a.75.75 0 010-1.5h3.32a4.002 4.002 0 017.86 0h3.32a.75.75 0 010 1.5h-3.32zM8 10.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
+            </svg>
           </div>
           <div>
-            <h4 className="font-medium text-slate-200">Judge Verdict</h4>
-            <p className="text-xs text-slate-400">
-              {judgement.agent_ens && `by ${judgement.agent_ens}`}
-            </p>
+            <h3
+              className="text-sm font-semibold"
+              style={{ color: "var(--fg-default)" }}
+            >
+              Judge Verdict
+            </h3>
+            {resolvedEns && (
+              <span className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                for{" "}
+                <span style={{ color: "var(--accent-fg)" }}>
+                  {resolvedEns}
+                </span>
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-2xl font-bold ${isPassed ? 'text-green-400' : 'text-red-400'}`}>
-            {judgement.points_awarded}
-          </p>
-          <p className="text-xs text-slate-500">points</p>
+          <div
+            className="text-2xl font-bold"
+            style={{
+              color:
+                resolvedPoints > 0
+                  ? "var(--success-fg)"
+                  : "var(--fg-muted)",
+            }}
+          >
+            {resolvedPoints}
+          </div>
+          <div
+            className="text-xs"
+            style={{ color: "var(--fg-subtle)" }}
+          >
+            points awarded
+          </div>
         </div>
       </div>
 
-      {/* Code quality score */}
-      {verdict.code_quality_score !== undefined && (
-        <div className="mb-4">
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-slate-400">Code Quality</span>
-            <span className="text-slate-200">{verdict.code_quality_score}/10</span>
+      {/* Test results */}
+      {totalTests > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span
+              className="text-xs font-medium uppercase tracking-wide"
+              style={{ color: "var(--fg-subtle)" }}
+            >
+              Tests ({passedTests.length}/{totalTests} passed)
+            </span>
+            <span
+              className="text-xs font-medium"
+              style={{
+                color:
+                  passRate === 100
+                    ? "var(--success-fg)"
+                    : passRate >= 50
+                    ? "var(--warning-fg)"
+                    : "var(--danger-fg)",
+              }}
+            >
+              {Math.round(passRate)}%
+            </span>
           </div>
-          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-sky-500 rounded-full transition-all"
-              style={{ width: `${verdict.code_quality_score * 10}%` }}
+
+          {/* Progress bar */}
+          <div
+            className="h-1.5 rounded-full overflow-hidden"
+            style={{ backgroundColor: "var(--bg-subtle)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${passRate}%`,
+                backgroundColor:
+                  passRate === 100
+                    ? "var(--success-fg)"
+                    : passRate >= 50
+                    ? "var(--warning-fg)"
+                    : "var(--danger-fg)",
+              }}
+            />
+          </div>
+
+          {/* Test list */}
+          <div className="space-y-1 mt-2">
+            {passedTests.map((test, i) => (
+              <div
+                key={`pass-${i}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded text-sm"
+                style={{ backgroundColor: "var(--bg-subtle)" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="shrink-0"
+                  style={{ color: "var(--success-fg)" }}
+                >
+                  <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+                </svg>
+                <span
+                  className="font-mono text-xs"
+                  style={{ color: "var(--fg-default)" }}
+                >
+                  {test}
+                </span>
+              </div>
+            ))}
+            {failedTests.map((test, i) => (
+              <div
+                key={`fail-${i}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded text-sm"
+                style={{ backgroundColor: "var(--bg-subtle)" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="shrink-0"
+                  style={{ color: "var(--danger-fg)" }}
+                >
+                  <path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z" />
+                </svg>
+                <span
+                  className="font-mono text-xs"
+                  style={{ color: "var(--fg-muted)" }}
+                >
+                  {test}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bonus criteria */}
+      {(bonusAchieved.length > 0 || bonusMissed.length > 0) && (
+        <div
+          className="space-y-2 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <span
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: "var(--fg-subtle)" }}
+          >
+            Bonus Criteria
+          </span>
+          <div className="space-y-1">
+            {bonusAchieved.map((criterion, i) => (
+              <div
+                key={`bonus-pass-${i}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded text-sm"
+                style={{ backgroundColor: "var(--success-subtle)" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="shrink-0"
+                  style={{ color: "var(--success-fg)" }}
+                >
+                  <path d="M8 16A8 8 0 118 0a8 8 0 010 16zm3.78-9.72a.75.75 0 00-1.06-1.06L7.25 8.689 5.28 6.72a.75.75 0 00-1.06 1.06l2.5 2.5a.75.75 0 001.06 0l4-4z" />
+                </svg>
+                <span style={{ color: "var(--success-fg)" }}>
+                  {criterion}
+                </span>
+              </div>
+            ))}
+            {bonusMissed.map((criterion, i) => (
+              <div
+                key={`bonus-miss-${i}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded text-sm"
+                style={{ backgroundColor: "var(--bg-subtle)" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="shrink-0"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  <path d="M8 0a8 8 0 110 16A8 8 0 018 0zM5.354 4.646a.5.5 0 00-.708.708L7.293 8l-2.647 2.646a.5.5 0 00.708.708L8 8.707l2.646 2.647a.5.5 0 00.708-.708L8.707 8l2.647-2.646a.5.5 0 00-.708-.708L8 7.293 5.354 4.646z" />
+                </svg>
+                <span style={{ color: "var(--fg-subtle)" }}>
+                  {criterion}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Code quality */}
+      {verdict.code_quality != null && (
+        <div
+          className="space-y-2 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <div className="flex items-center justify-between">
+            <span
+              className="text-xs font-medium uppercase tracking-wide"
+              style={{ color: "var(--fg-subtle)" }}
+            >
+              Code Quality
+            </span>
+            <span
+              className="text-sm font-bold"
+              style={{
+                color:
+                  verdict.code_quality >= 80
+                    ? "var(--success-fg)"
+                    : verdict.code_quality >= 50
+                    ? "var(--warning-fg)"
+                    : "var(--danger-fg)",
+              }}
+            >
+              {verdict.code_quality}/100
+            </span>
+          </div>
+          <div
+            className="h-2 rounded-full overflow-hidden"
+            style={{ backgroundColor: "var(--bg-subtle)" }}
+          >
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${verdict.code_quality}%`,
+                background:
+                  verdict.code_quality >= 80
+                    ? "linear-gradient(90deg, var(--success-emphasis), var(--success-fg))"
+                    : verdict.code_quality >= 50
+                    ? "linear-gradient(90deg, var(--warning-emphasis), var(--warning-fg))"
+                    : "linear-gradient(90deg, var(--danger-emphasis), var(--danger-fg))",
+              }}
             />
           </div>
         </div>
       )}
 
-      {/* Test results */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        {verdict.passed_tests && verdict.passed_tests.length > 0 && (
-          <div>
-            <p className="text-xs text-slate-500 uppercase mb-2">Passed Tests</p>
-            <div className="space-y-1">
-              {verdict.passed_tests.map((test, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-slate-300">{test}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {verdict.failed_tests && verdict.failed_tests.length > 0 && (
-          <div>
-            <p className="text-xs text-slate-500 uppercase mb-2">Failed Tests</p>
-            <div className="space-y-1">
-              {verdict.failed_tests.map((test, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span className="text-slate-300">{test}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bonus achievements */}
-      {(verdict.bonus_achieved?.length || verdict.bonus_missed?.length) && (
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          {verdict.bonus_achieved && verdict.bonus_achieved.length > 0 && (
-            <div>
-              <p className="text-xs text-slate-500 uppercase mb-2">Bonus Achieved</p>
-              <div className="flex flex-wrap gap-1">
-                {verdict.bonus_achieved.map((bonus, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-green-500/10 border border-green-500/30 rounded text-xs text-green-400">
-                    {bonus}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {verdict.bonus_missed && verdict.bonus_missed.length > 0 && (
-            <div>
-              <p className="text-xs text-slate-500 uppercase mb-2">Bonus Missed</p>
-              <div className="flex flex-wrap gap-1">
-                {verdict.bonus_missed.map((bonus, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-400">
-                    {bonus}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Reasoning */}
       {verdict.reasoning && (
-        <div className="pt-4 border-t border-slate-700">
-          <p className="text-xs text-slate-500 uppercase mb-2">Judge Analysis</p>
-          <p className="text-sm text-slate-300">{verdict.reasoning}</p>
+        <div
+          className="space-y-2 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <span
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: "var(--fg-subtle)" }}
+          >
+            Reasoning
+          </span>
+          <p
+            className="text-sm leading-relaxed"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            {verdict.reasoning}
+          </p>
         </div>
       )}
 
       {/* Suggestions */}
       {verdict.suggestions && verdict.suggestions.length > 0 && (
-        <div className="pt-4 border-t border-slate-700 mt-4">
-          <p className="text-xs text-slate-500 uppercase mb-2">Suggestions</p>
-          <ul className="space-y-1">
+        <div
+          className="space-y-2 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <span
+            className="text-xs font-medium uppercase tracking-wide"
+            style={{ color: "var(--fg-subtle)" }}
+          >
+            Suggestions
+          </span>
+          <ul className="space-y-1.5">
             {verdict.suggestions.map((suggestion, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-slate-400">
-                <span className="text-sky-400 mt-0.5">•</span>
+              <li
+                key={i}
+                className="flex items-start gap-2 text-sm"
+                style={{ color: "var(--fg-muted)" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="mt-0.5 shrink-0"
+                  style={{ color: "var(--accent-fg)" }}
+                >
+                  <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
                 <span>{suggestion}</span>
               </li>
             ))}
