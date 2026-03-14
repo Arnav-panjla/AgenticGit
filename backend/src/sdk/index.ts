@@ -1,8 +1,9 @@
 /**
- * AgentBranch SDK v2
+ * AgentBranch SDK v3
  *
  * Core functions for AI agents to interact with the version control system.
  * v2 adds: semantic commits, reasoning graph, replay traces
+ * v3 adds: knowledge context for multi-agent collaboration handoffs
  */
 
 import { query, queryOne } from '../db/client';
@@ -52,6 +53,27 @@ export interface TraceData {
   result: string;
 }
 
+/**
+ * Structured knowledge context for agent-to-agent handoff.
+ * Captures everything the next agent needs to continue the work.
+ */
+export interface KnowledgeContext {
+  /** Key decisions made during this work (e.g., "Chose React for UI") */
+  decisions?: string[];
+  /** Architecture overview or notes */
+  architecture?: string;
+  /** Libraries/tools selected or used */
+  libraries?: string[];
+  /** Unresolved questions for the next agent */
+  open_questions?: string[];
+  /** Recommended next steps */
+  next_steps?: string[];
+  /** IDs of commits this work depends on */
+  dependencies?: string[];
+  /** Free-form summary for the next agent taking over */
+  handoff_summary?: string;
+}
+
 export interface Commit {
   id: string;
   repo_id: string;
@@ -73,6 +95,8 @@ export interface Commit {
   trace_context?: Record<string, any>;
   trace_tools?: Array<{ name: string; input: any; output: any }>;
   trace_result?: string;
+  // Knowledge handoff (v3)
+  knowledge_context?: KnowledgeContext;
   // Populated by readMemory
   content?: string;
   author_ens?: string;
@@ -100,6 +124,8 @@ export interface CommitOptions {
   reasoningType?: ReasoningType;
   trace?: TraceData;
   skipSemantics?: boolean;
+  /** Structured knowledge handoff for the next agent */
+  knowledgeContext?: KnowledgeContext;
 }
 
 export interface SearchResult {
@@ -212,7 +238,7 @@ export async function commitMemory(
   authorEns: string,
   options: CommitOptions = {}
 ): Promise<Commit> {
-  const { contentType = 'text', reasoningType, trace, skipSemantics = false } = options;
+  const { contentType = 'text', reasoningType, trace, skipSemantics = false, knowledgeContext } = options;
 
   const author = await getAgent(authorEns);
   if (!author) throw new Error(`Agent not found: ${authorEns}`);
@@ -248,13 +274,13 @@ export async function commitMemory(
     }
   }
 
-  // Build insert query with all v2 fields
+  // Build insert query with all v2+v3 fields
   const [commit] = await query<Commit>(
     `INSERT INTO commits (
       repo_id, branch_id, author_agent_id, message, content_ref, content_type,
       parent_commit_id, embedding, semantic_summary, tags, reasoning_type,
-      trace_prompt, trace_context, trace_tools, trace_result
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      trace_prompt, trace_context, trace_tools, trace_result, knowledge_context
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     RETURNING *`,
     [
       repoId,
@@ -272,6 +298,7 @@ export async function commitMemory(
       trace?.context ? JSON.stringify(trace.context) : null,
       trace?.tools ? JSON.stringify(trace.tools) : null,
       trace?.result ?? null,
+      knowledgeContext ? JSON.stringify(knowledgeContext) : null,
     ]
   );
 

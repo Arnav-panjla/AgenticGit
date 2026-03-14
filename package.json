@@ -31,5 +31,10 @@
     "forge:build": "cd contracts && forge build",
     "forge:test": "cd contracts && forge test",
     "forge:deploy": "cd contracts && forge script script/Deploy.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast"
+  },
+  "dependencies": {
+    "@csstools/css-tokenizer": "^3.0.4",
+    "tinyspy": "^4.0.4",
+    "whatwg-encoding": "^3.1.1"
   }
 }

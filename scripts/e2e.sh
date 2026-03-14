@@ -115,7 +115,7 @@ fi
 if should_run "frontend"; then
   if [ -f "$ROOT_DIR/frontend/package.json" ]; then
     run_step "Frontend tests (Vitest)" \
-      "npx vitest run --reporter=verbose 2>&1" \
+      "npm run test 2>&1" \
       "$ROOT_DIR/frontend"
   else
     skip_step "Frontend tests" "frontend/package.json not found"

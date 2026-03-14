@@ -1,16 +1,16 @@
 #!/bin/bash
-# Quick start script for AgentBranch v2
+# Quick start script for AgentBranch v3
 # Usage: ./scripts/quick_start.sh
 # Optional env vars:
 #   API_URL (default http://localhost:3001)
-#   FRONTEND_PORT (default 5173)
+#   FRONTEND_PORT (default 3000)
 #   SKIP_TESTS=1 to skip tests
 #   SKIP_CONTRACTS=1 to skip Foundry build/test
 
 set -e
 
 API_URL="${API_URL:-http://localhost:3001}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,8 +40,10 @@ fi
 log "Installing workspace deps (npm workspaces)"
 npm install
 
-log "Running DB migration (v2)"
+log "Running DB migrations (v2 + v3 + v4)"
 npm run migrate:v2
+npm run migrate:v3
+npm run migrate:v4
 
 if [ -z "$SKIP_TESTS" ]; then
   log "Running backend tests"
@@ -71,8 +73,8 @@ sleep 2
 
 log "Starting frontend dev server (port $FRONTEND_PORT, API $API_URL)"
 cd frontend
-export VITE_API_URL="$API_URL"
-npm run dev -- --host --port "$FRONTEND_PORT" >/tmp/agentbranch_frontend.log 2>&1 &
+export NEXT_PUBLIC_API_URL="$API_URL"
+npm run dev -- --port "$FRONTEND_PORT" >/tmp/agentbranch_frontend.log 2>&1 &
 FRONT_PID=$!
 cd ..
 

@@ -1,9 +1,9 @@
 /**
- * Component Tests - StatusBadge, ScoreCard, CommitCard, LoadingSkeleton
+ * Component Tests - StatusBadge, ScoreCard, CommitCard, LoadingSkeleton, ContextChain
  */
 
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ScoreCard } from "@/components/ScoreCard";
@@ -13,7 +13,8 @@ import {
   TableSkeleton,
   PageSkeleton,
 } from "@/components/LoadingSkeleton";
-import type { Scorecard, Commit } from "@/lib/api";
+import { ContextChain } from "@/components/ContextChain";
+import type { Scorecard, Commit, ContextChain as ContextChainType } from "@/lib/api";
 
 /* ── StatusBadge ──────────────────────────────────────────────── */
 
@@ -283,5 +284,296 @@ describe("LoadingSkeleton", () => {
     const { container } = render(<PageSkeleton />);
     const cards = container.querySelectorAll(".card");
     expect(cards.length).toBe(6); // 6 CardSkeleton instances
+  });
+});
+
+/* ── ContextChain ─────────────────────────────────────────────── */
+
+describe("ContextChain", () => {
+  const mockChainData: ContextChainType = {
+    repo_id: "repo-1",
+    total_commits: 5,
+    total_agents: 3,
+    handoffs: [
+      {
+        agent: { id: "a1", ens_name: "architect-agent.eth", role: "architect" },
+        commits: [
+          {
+            id: "c1",
+            message: "Plan Sudoku architecture",
+            semantic_summary: "Component hierarchy and data model for Sudoku game",
+            reasoning_type: "knowledge",
+            tags: ["architecture", "planning"],
+            created_at: new Date().toISOString(),
+            branch_name: "main",
+          },
+        ],
+        contribution_summary: "Designed overall architecture and data model",
+      },
+      {
+        agent: { id: "a2", ens_name: "engineer-agent.eth", role: "engineer" },
+        commits: [
+          {
+            id: "c2",
+            message: "Implement puzzle generator",
+            semantic_summary: "Backtracking algorithm for valid Sudoku puzzles",
+            reasoning_type: "experiment",
+            tags: ["implementation", "algorithm"],
+            created_at: new Date().toISOString(),
+            branch_name: "main",
+          },
+          {
+            id: "c3",
+            message: "Add solver validation",
+            semantic_summary: null,
+            reasoning_type: "trace",
+            tags: [],
+            created_at: new Date().toISOString(),
+            branch_name: "main",
+          },
+        ],
+        contribution_summary: "Implemented core game logic and solver",
+      },
+      {
+        agent: { id: "a3", ens_name: "qa-agent.eth", role: "qa" },
+        commits: [
+          {
+            id: "c4",
+            message: "Add test coverage for solver",
+            semantic_summary: "Unit tests covering edge cases in puzzle generation",
+            reasoning_type: "conclusion",
+            tags: ["testing"],
+            created_at: new Date().toISOString(),
+            branch_name: "main",
+          },
+          {
+            id: "c5",
+            message: "Integration test suite",
+            semantic_summary: null,
+            reasoning_type: null,
+            tags: [],
+            created_at: new Date().toISOString(),
+            branch_name: "main",
+          },
+        ],
+        contribution_summary: "Validated correctness with comprehensive tests",
+      },
+    ],
+  };
+
+  function mockFetchSuccess(data: ContextChainType) {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(data),
+    });
+  }
+
+  function mockFetchError(message: string) {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: message }),
+    });
+  }
+
+  it("renders loading state initially", () => {
+    // Never resolve so component stays in loading state
+    (global.fetch as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise(() => {})
+    );
+    const { container } = render(<ContextChain repoId="repo-1" />);
+    // Loading skeleton has placeholder divs
+    expect(container.querySelector(".card")).toBeInTheDocument();
+  });
+
+  it("renders empty state when no handoffs", async () => {
+    mockFetchSuccess({
+      repo_id: "repo-1",
+      total_commits: 0,
+      total_agents: 0,
+      handoffs: [],
+    });
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Agent Context Chain")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/No commits yet/)
+    ).toBeInTheDocument();
+  });
+
+  it("renders error state when fetch fails", async () => {
+    mockFetchError("Internal server error");
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Failed to load context chain/)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("renders all handoff segments with agent names", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("architect-agent.eth")).toBeInTheDocument();
+    });
+    expect(screen.getByText("engineer-agent.eth")).toBeInTheDocument();
+    expect(screen.getByText("qa-agent.eth")).toBeInTheDocument();
+  });
+
+  it("renders agent role badges", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("architect")).toBeInTheDocument();
+    });
+    expect(screen.getByText("engineer")).toBeInTheDocument();
+    expect(screen.getByText("qa")).toBeInTheDocument();
+  });
+
+  it("renders commit counts per segment", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("1 commit")).toBeInTheDocument();
+    });
+    // engineer and qa both have 2 commits
+    const twoCommits = screen.getAllByText("2 commits");
+    expect(twoCommits.length).toBe(2);
+  });
+
+  it("renders summary stats in header", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/3 agents/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/5 commits/)).toBeInTheDocument();
+    expect(screen.getByText(/3 handoffs/)).toBeInTheDocument();
+  });
+
+  it("renders contribution summaries", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Designed overall architecture and data model")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Implemented core game logic and solver")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Validated correctness with comprehensive tests")
+    ).toBeInTheDocument();
+  });
+
+  it("renders handoff arrows between segments", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("architect-agent.eth")).toBeInTheDocument();
+    });
+    // There should be handoff labels between segments (2 arrows for 3 segments)
+    const handoffs = screen.getAllByText("handoff");
+    expect(handoffs.length).toBe(2);
+  });
+
+  it("auto-expands the last segment", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    // The last segment (qa-agent) should be auto-expanded, showing its commit messages
+    await waitFor(() => {
+      expect(
+        screen.getByText("Add test coverage for solver")
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Integration test suite")
+    ).toBeInTheDocument();
+  });
+
+  it("toggles segment expansion on click", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    // Wait for render
+    await waitFor(() => {
+      expect(screen.getByText("architect-agent.eth")).toBeInTheDocument();
+    });
+
+    // First segment (architect) is NOT expanded by default (only last is)
+    expect(
+      screen.queryByText("Plan Sudoku architecture")
+    ).not.toBeInTheDocument();
+
+    // Click on the architect segment button to expand it
+    const architectButton = screen.getByText("architect-agent.eth").closest("button");
+    if (architectButton) {
+      await userEvent.click(architectButton);
+    }
+
+    // Now the architect commit should be visible
+    await waitFor(() => {
+      expect(
+        screen.getByText("Plan Sudoku architecture")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("renders tags on expanded commits", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    // Last segment is auto-expanded — its first commit has tags: ["testing"]
+    await waitFor(() => {
+      expect(screen.getByText("testing")).toBeInTheDocument();
+    });
+  });
+
+  it("renders reasoning type badges on expanded commits", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    // Last segment auto-expanded — first commit has reasoning_type: "conclusion"
+    await waitFor(() => {
+      expect(screen.getByText("Conclusion")).toBeInTheDocument();
+    });
+  });
+
+  it("renders agent ENS names as links", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      const link = screen.getByText("architect-agent.eth");
+      expect(link.closest("a")).toHaveAttribute(
+        "href",
+        "/agents/architect-agent.eth"
+      );
+    });
   });
 });
