@@ -7,7 +7,7 @@
  */
 
 import { FastifyInstance } from 'fastify';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { query, queryOne } from '../db/client';
 import { generateToken, requireAuth } from '../middleware/auth';
 

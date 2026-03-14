@@ -1,5 +1,5 @@
 /**
- * AgentBranch API Server (v2)
+ * AgentBranch API Server (v3)
  */
 
 import Fastify from 'fastify';
@@ -85,7 +85,7 @@ async function main() {
 
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║                    AgentBranch API v2.0.0                     ║
+║                    AgentBranch API v3.0.0                     ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Server:     http://localhost:${port}                           ║
 ║  Health:     http://localhost:${port}/health                    ║

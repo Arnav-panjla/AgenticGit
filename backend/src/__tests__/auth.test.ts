@@ -8,7 +8,7 @@ import { authPlugin, generateToken, verifyToken } from '../middleware/auth';
 import { pool } from '../db/client';
 
 // Mock bcrypt
-jest.mock('bcrypt', () => ({
+jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed_password'),
   compare: jest.fn().mockImplementation((password, hash) => {
     return Promise.resolve(password === 'correct_password');
@@ -117,7 +117,7 @@ describe('Auth Routes', () => {
         created_at: new Date().toISOString(),
       });
 
-      const bcrypt = require('bcrypt');
+      const bcrypt = require('bcryptjs');
       bcrypt.compare.mockResolvedValue(true);
 
       const response = await app.inject({
@@ -141,7 +141,7 @@ describe('Auth Routes', () => {
         password_hash: 'hashed_password',
       });
 
-      const bcrypt = require('bcrypt');
+      const bcrypt = require('bcryptjs');
       bcrypt.compare.mockResolvedValue(false);
 
       const response = await app.inject({
