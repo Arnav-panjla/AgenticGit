@@ -292,6 +292,88 @@ export function ContextChain({ repoId, branch }: ContextChainProps) {
                         </p>
                       )}
 
+                      {/* Knowledge brief (always visible when present) */}
+                      {segment.knowledge_brief && (
+                        <div
+                          className="mt-2 p-2 rounded"
+                          style={{
+                            backgroundColor: "var(--success-subtle)",
+                            border: "1px solid var(--success-muted)",
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center gap-1 mb-1">
+                            <svg
+                              width="12"
+                              height="12"
+                              viewBox="0 0 16 16"
+                              fill="currentColor"
+                              style={{ color: "var(--success-fg)" }}
+                            >
+                              <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 100-2 1 1 0 000 2z" />
+                            </svg>
+                            <span
+                              className="text-xs font-medium"
+                              style={{ color: "var(--success-fg)" }}
+                            >
+                              Knowledge Brief
+                            </span>
+                          </div>
+
+                          {segment.knowledge_brief.handoff_summary && (
+                            <p
+                              className="text-xs leading-relaxed mb-1.5"
+                              style={{ color: "var(--fg-default)" }}
+                            >
+                              {segment.knowledge_brief.handoff_summary}
+                            </p>
+                          )}
+
+                          <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {segment.knowledge_brief.decisions &&
+                              segment.knowledge_brief.decisions.length > 0 && (
+                                <span
+                                  className="text-xs"
+                                  style={{ color: "var(--fg-muted)" }}
+                                >
+                                  {segment.knowledge_brief.decisions.length} decision
+                                  {segment.knowledge_brief.decisions.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            {segment.knowledge_brief.libraries &&
+                              segment.knowledge_brief.libraries.length > 0 && (
+                                <span
+                                  className="text-xs"
+                                  style={{ color: "var(--fg-muted)" }}
+                                >
+                                  {segment.knowledge_brief.libraries.length} lib
+                                  {segment.knowledge_brief.libraries.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            {segment.knowledge_brief.next_steps &&
+                              segment.knowledge_brief.next_steps.length > 0 && (
+                                <span
+                                  className="text-xs"
+                                  style={{ color: "var(--fg-muted)" }}
+                                >
+                                  {segment.knowledge_brief.next_steps.length} next step
+                                  {segment.knowledge_brief.next_steps.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            {segment.knowledge_brief.open_questions &&
+                              segment.knowledge_brief.open_questions.length > 0 && (
+                                <span
+                                  className="text-xs"
+                                  style={{ color: "var(--warning-fg)" }}
+                                >
+                                  {segment.knowledge_brief.open_questions.length} open question
+                                  {segment.knowledge_brief.open_questions.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Expanded commit details */}
                       {isExpanded && (
                         <div className="mt-3 space-y-2 animate-in">

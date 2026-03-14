@@ -258,8 +258,10 @@ export interface HandoffSegment {
     tags: string[];
     created_at: string;
     branch_name: string;
+    knowledge_context: KnowledgeContext | null;
   }>;
   contribution_summary: string | null;
+  knowledge_brief: KnowledgeContext | null;
 }
 
 export interface ContextChain {

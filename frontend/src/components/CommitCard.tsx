@@ -23,6 +23,14 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
     (commit.trace_context &&
       Object.keys(commit.trace_context).length > 0);
 
+  const hasKnowledge = commit.knowledge_context &&
+    (commit.knowledge_context.decisions?.length ||
+     commit.knowledge_context.architecture ||
+     commit.knowledge_context.libraries?.length ||
+     commit.knowledge_context.open_questions?.length ||
+     commit.knowledge_context.next_steps?.length ||
+     commit.knowledge_context.handoff_summary);
+
   return (
     <div className="card card-hover p-4 animate-in">
       {/* Top row: commit message + time */}
@@ -131,6 +139,170 @@ export function CommitCard({ commit, showExpanded = false }: CommitCardProps) {
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Knowledge Context */}
+      {hasKnowledge && commit.knowledge_context && (
+        <div
+          className="mt-3 pt-3 border-t"
+          style={{ borderColor: "var(--border-muted)" }}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              style={{ color: "var(--success-fg)" }}
+            >
+              <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 100-2 1 1 0 000 2z" />
+            </svg>
+            <span
+              className="text-xs font-medium uppercase tracking-wide"
+              style={{ color: "var(--success-fg)" }}
+            >
+              Knowledge Context
+            </span>
+          </div>
+
+          {/* Handoff summary */}
+          {commit.knowledge_context.handoff_summary && (
+            <p
+              className="text-xs leading-relaxed mb-2 p-2 rounded"
+              style={{
+                backgroundColor: "var(--success-subtle)",
+                color: "var(--fg-default)",
+                border: "1px solid var(--success-muted)",
+              }}
+            >
+              {commit.knowledge_context.handoff_summary}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* Decisions */}
+            {commit.knowledge_context.decisions && commit.knowledge_context.decisions.length > 0 && (
+              <div className="space-y-1">
+                <div
+                  className="text-xs font-medium"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  Decisions
+                </div>
+                <ul className="space-y-0.5">
+                  {commit.knowledge_context.decisions.map((d, i) => (
+                    <li
+                      key={i}
+                      className="text-xs leading-relaxed pl-3 relative"
+                      style={{ color: "var(--fg-muted)" }}
+                    >
+                      <span className="absolute left-0" style={{ color: "var(--accent-fg)" }}>-</span>
+                      {d}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Libraries */}
+            {commit.knowledge_context.libraries && commit.knowledge_context.libraries.length > 0 && (
+              <div className="space-y-1">
+                <div
+                  className="text-xs font-medium"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  Libraries
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {commit.knowledge_context.libraries.map((lib, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono"
+                      style={{
+                        backgroundColor: "var(--accent-subtle)",
+                        color: "var(--accent-fg)",
+                        border: "1px solid var(--accent-muted)",
+                        fontSize: "10px",
+                      }}
+                    >
+                      {lib}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Next Steps */}
+            {commit.knowledge_context.next_steps && commit.knowledge_context.next_steps.length > 0 && (
+              <div className="space-y-1">
+                <div
+                  className="text-xs font-medium"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  Next Steps
+                </div>
+                <ul className="space-y-0.5">
+                  {commit.knowledge_context.next_steps.map((s, i) => (
+                    <li
+                      key={i}
+                      className="text-xs leading-relaxed pl-3 relative"
+                      style={{ color: "var(--fg-muted)" }}
+                    >
+                      <span className="absolute left-0" style={{ color: "var(--warning-fg)" }}>-</span>
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Open Questions */}
+            {commit.knowledge_context.open_questions && commit.knowledge_context.open_questions.length > 0 && (
+              <div className="space-y-1">
+                <div
+                  className="text-xs font-medium"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  Open Questions
+                </div>
+                <ul className="space-y-0.5">
+                  {commit.knowledge_context.open_questions.map((q, i) => (
+                    <li
+                      key={i}
+                      className="text-xs leading-relaxed pl-3 relative"
+                      style={{ color: "var(--fg-muted)" }}
+                    >
+                      <span className="absolute left-0" style={{ color: "var(--danger-fg)" }}>?</span>
+                      {q}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Architecture */}
+          {commit.knowledge_context.architecture && (
+            <div className="mt-2 space-y-1">
+              <div
+                className="text-xs font-medium"
+                style={{ color: "var(--fg-subtle)" }}
+              >
+                Architecture
+              </div>
+              <div
+                className="text-xs font-mono p-2 rounded overflow-x-auto leading-relaxed"
+                style={{
+                  backgroundColor: "var(--bg-inset)",
+                  color: "var(--fg-muted)",
+                  border: "1px solid var(--border-muted)",
+                }}
+              >
+                {commit.knowledge_context.architecture}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
