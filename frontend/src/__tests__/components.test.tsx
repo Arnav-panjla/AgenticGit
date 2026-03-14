@@ -1,5 +1,6 @@
 /**
  * Component Tests - StatusBadge, ScoreCard, CommitCard, LoadingSkeleton, ContextChain
+ * Updated v4: knowledge context tests for CommitCard and ContextChain
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -255,6 +256,75 @@ describe("CommitCard", () => {
     render(<CommitCard commit={minimal} />);
     expect(screen.getByText("Simple commit")).toBeInTheDocument();
   });
+
+  it("renders knowledge context section when present", () => {
+    const commitWithKnowledge: Commit = {
+      ...mockCommit,
+      knowledge_context: {
+        decisions: ["Use JWT for auth", "Use bcrypt hashing"],
+        architecture: "Controller → Service → Repository pattern",
+        libraries: ["fastify", "bcryptjs"],
+        next_steps: ["Add rate limiting"],
+        open_questions: ["Should we support OAuth?"],
+        handoff_summary: "Auth module complete with JWT and bcrypt.",
+      },
+    };
+    render(<CommitCard commit={commitWithKnowledge} />);
+    expect(screen.getByText("Knowledge Context")).toBeInTheDocument();
+    expect(screen.getByText("Auth module complete with JWT and bcrypt.")).toBeInTheDocument();
+  });
+
+  it("renders knowledge context decisions", () => {
+    const commitWithDecisions: Commit = {
+      ...mockCommit,
+      knowledge_context: {
+        decisions: ["Use React for UI", "Backtracking solver"],
+      },
+    };
+    render(<CommitCard commit={commitWithDecisions} />);
+    expect(screen.getByText("Decisions")).toBeInTheDocument();
+    expect(screen.getByText("Use React for UI")).toBeInTheDocument();
+    expect(screen.getByText("Backtracking solver")).toBeInTheDocument();
+  });
+
+  it("renders knowledge context libraries as chips", () => {
+    const commitWithLibs: Commit = {
+      ...mockCommit,
+      knowledge_context: {
+        libraries: ["react", "typescript", "vitest"],
+      },
+    };
+    render(<CommitCard commit={commitWithLibs} />);
+    expect(screen.getByText("Libraries")).toBeInTheDocument();
+    expect(screen.getByText("react")).toBeInTheDocument();
+    expect(screen.getByText("vitest")).toBeInTheDocument();
+  });
+
+  it("renders knowledge context architecture block", () => {
+    const commitWithArch: Commit = {
+      ...mockCommit,
+      knowledge_context: {
+        architecture: "Grid → Cell → Solver pipeline",
+      },
+    };
+    render(<CommitCard commit={commitWithArch} />);
+    expect(screen.getByText("Architecture")).toBeInTheDocument();
+    expect(screen.getByText("Grid → Cell → Solver pipeline")).toBeInTheDocument();
+  });
+
+  it("does not render knowledge context when empty", () => {
+    const commitEmptyKnowledge: Commit = {
+      ...mockCommit,
+      knowledge_context: {
+        decisions: [],
+        libraries: [],
+        next_steps: [],
+        open_questions: [],
+      },
+    };
+    render(<CommitCard commit={commitEmptyKnowledge} />);
+    expect(screen.queryByText("Knowledge Context")).not.toBeInTheDocument();
+  });
 });
 
 /* ── LoadingSkeleton ──────────────────────────────────────────── */
@@ -306,9 +376,23 @@ describe("ContextChain", () => {
             tags: ["architecture", "planning"],
             created_at: new Date().toISOString(),
             branch_name: "main",
+            knowledge_context: {
+              decisions: ["Use React for UI", "Backtracking solver"],
+              architecture: "Grid → Cell → Solver",
+              libraries: ["react", "typescript"],
+              next_steps: ["Implement grid renderer"],
+              handoff_summary: "Architecture designed. Ready for implementation.",
+            },
           },
         ],
         contribution_summary: "Designed overall architecture and data model",
+        knowledge_brief: {
+          decisions: ["Use React for UI", "Backtracking solver"],
+          architecture: "Grid → Cell → Solver",
+          libraries: ["react", "typescript"],
+          next_steps: ["Implement grid renderer"],
+          handoff_summary: "Architecture designed. Ready for implementation.",
+        },
       },
       {
         agent: { id: "a2", ens_name: "engineer-agent.eth", role: "engineer" },
@@ -321,6 +405,7 @@ describe("ContextChain", () => {
             tags: ["implementation", "algorithm"],
             created_at: new Date().toISOString(),
             branch_name: "main",
+            knowledge_context: null,
           },
           {
             id: "c3",
@@ -330,9 +415,17 @@ describe("ContextChain", () => {
             tags: [],
             created_at: new Date().toISOString(),
             branch_name: "main",
+            knowledge_context: {
+              decisions: ["Constraint propagation first"],
+              handoff_summary: "Solver validated. Needs test coverage.",
+            },
           },
         ],
         contribution_summary: "Implemented core game logic and solver",
+        knowledge_brief: {
+          decisions: ["Constraint propagation first"],
+          handoff_summary: "Solver validated. Needs test coverage.",
+        },
       },
       {
         agent: { id: "a3", ens_name: "qa-agent.eth", role: "qa" },
@@ -345,6 +438,7 @@ describe("ContextChain", () => {
             tags: ["testing"],
             created_at: new Date().toISOString(),
             branch_name: "main",
+            knowledge_context: null,
           },
           {
             id: "c5",
@@ -354,9 +448,11 @@ describe("ContextChain", () => {
             tags: [],
             created_at: new Date().toISOString(),
             branch_name: "main",
+            knowledge_context: null,
           },
         ],
         contribution_summary: "Validated correctness with comprehensive tests",
+        knowledge_brief: null,
       },
     ],
   };
@@ -575,5 +671,55 @@ describe("ContextChain", () => {
         "/agents/architect-agent.eth"
       );
     });
+  });
+
+  it("renders knowledge brief on segments that have one", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("architect-agent.eth")).toBeInTheDocument();
+    });
+
+    // The architect segment has a knowledge_brief with handoff_summary
+    expect(
+      screen.getByText("Architecture designed. Ready for implementation.")
+    ).toBeInTheDocument();
+
+    // The engineer segment also has a knowledge_brief
+    expect(
+      screen.getByText("Solver validated. Needs test coverage.")
+    ).toBeInTheDocument();
+  });
+
+  it("renders knowledge brief stats (decisions, libs, steps)", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("architect-agent.eth")).toBeInTheDocument();
+    });
+
+    // Architect brief has 2 decisions, 2 libs, 1 next step
+    expect(screen.getByText("2 decisions")).toBeInTheDocument();
+    expect(screen.getByText("2 libs")).toBeInTheDocument();
+    expect(screen.getByText("1 next step")).toBeInTheDocument();
+  });
+
+  it("does not render knowledge brief for segments without one", async () => {
+    mockFetchSuccess(mockChainData);
+
+    render(<ContextChain repoId="repo-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("qa-agent.eth")).toBeInTheDocument();
+    });
+
+    // The QA segment has knowledge_brief: null — no "Knowledge Brief" label for it
+    // But architect and engineer segments DO have it, so exactly 2 instances
+    const knowledgeBriefLabels = screen.getAllByText("Knowledge Brief");
+    expect(knowledgeBriefLabels.length).toBe(2);
   });
 });

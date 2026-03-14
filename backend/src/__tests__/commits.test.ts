@@ -1,7 +1,8 @@
 /**
- * Commit Routes Tests (v2)
+ * Commit Routes Tests (v4)
  * 
- * Tests for semantic commits, search, graph, and replay endpoints.
+ * Tests for semantic commits, search, graph, replay, and
+ * knowledge context handoff endpoints.
  */
 
 import Fastify, { FastifyInstance } from 'fastify';
@@ -187,6 +188,166 @@ describe('Commit Routes', () => {
       expect(response.statusCode).toBe(400);
       const body = JSON.parse(response.body);
       expect(body.error).toBe('Branch not found');
+    });
+
+    it('should create a commit with knowledge context', async () => {
+      const mockCommit = {
+        id: 'commit-kc-1',
+        repo_id: 'repo-1',
+        message: 'Architecture design for Sudoku game',
+        knowledge_context: {
+          decisions: ['Use React for UI', 'Backtracking solver algorithm'],
+          architecture: 'Component → Grid → Cell hierarchy',
+          libraries: ['react', 'typescript'],
+          open_questions: ['Should we support 16x16 grids?'],
+          next_steps: ['Implement grid renderer', 'Add solver engine'],
+          dependencies: [],
+          handoff_summary: 'Designed core architecture with component hierarchy and solver approach.',
+        },
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Architecture document',
+          message: 'Architecture design for Sudoku game',
+          author_ens: 'architect.eth',
+          knowledge_context: {
+            decisions: ['Use React for UI', 'Backtracking solver algorithm'],
+            architecture: 'Component → Grid → Cell hierarchy',
+            libraries: ['react', 'typescript'],
+            open_questions: ['Should we support 16x16 grids?'],
+            next_steps: ['Implement grid renderer', 'Add solver engine'],
+            dependencies: [],
+            handoff_summary: 'Designed core architecture with component hierarchy and solver approach.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.knowledge_context).toBeDefined();
+      expect(body.knowledge_context.decisions).toHaveLength(2);
+      expect(body.knowledge_context.handoff_summary).toContain('core architecture');
+      expect(body.knowledge_context.libraries).toEqual(['react', 'typescript']);
+    });
+
+    it('should pass knowledge context to SDK commitMemory', async () => {
+      (sdk.commitMemory as jest.Mock).mockResolvedValue({
+        id: 'commit-kc-2',
+        repo_id: 'repo-1',
+        message: 'Implement solver',
+        created_at: new Date().toISOString(),
+      });
+
+      const knowledgeContext = {
+        decisions: ['Use backtracking algorithm'],
+        next_steps: ['Add unit tests'],
+        handoff_summary: 'Solver implemented with backtracking.',
+      };
+
+      await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'feature/solver',
+          content: 'Solver implementation',
+          message: 'Implement solver',
+          author_ens: 'engineer.eth',
+          knowledge_context: knowledgeContext,
+        },
+      });
+
+      expect(sdk.commitMemory).toHaveBeenCalledWith(
+        'repo-1',
+        'feature/solver',
+        'Solver implementation',
+        'Implement solver',
+        'engineer.eth',
+        expect.objectContaining({
+          knowledgeContext: expect.objectContaining({
+            decisions: ['Use backtracking algorithm'],
+            next_steps: ['Add unit tests'],
+            handoff_summary: 'Solver implemented with backtracking.',
+          }),
+        })
+      );
+    });
+
+    it('should handle commit with both trace and knowledge context', async () => {
+      const mockCommit = {
+        id: 'commit-kc-3',
+        repo_id: 'repo-1',
+        message: 'QA validation',
+        trace_prompt: 'Run test suite',
+        trace_result: 'All 42 tests passed',
+        knowledge_context: {
+          decisions: ['100% coverage on solver module'],
+          handoff_summary: 'All tests passing. Ready for release.',
+        },
+        created_at: new Date().toISOString(),
+      };
+
+      (sdk.commitMemory as jest.Mock).mockResolvedValue(mockCommit);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Test results',
+          message: 'QA validation',
+          author_ens: 'qa.eth',
+          trace: {
+            prompt: 'Run test suite',
+            result: 'All 42 tests passed',
+          },
+          knowledge_context: {
+            decisions: ['100% coverage on solver module'],
+            handoff_summary: 'All tests passing. Ready for release.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = JSON.parse(response.body);
+      expect(body.knowledge_context).toBeDefined();
+      expect(body.trace_prompt).toBe('Run test suite');
+    });
+
+    it('should handle commit with empty knowledge context gracefully', async () => {
+      (sdk.commitMemory as jest.Mock).mockResolvedValue({
+        id: 'commit-kc-4',
+        repo_id: 'repo-1',
+        message: 'Minor fix',
+        knowledge_context: {
+          decisions: [],
+          libraries: [],
+          open_questions: [],
+          next_steps: [],
+          dependencies: [],
+        },
+        created_at: new Date().toISOString(),
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/repos/repo-1/commits',
+        payload: {
+          branch: 'main',
+          content: 'Fix',
+          message: 'Minor fix',
+          author_ens: 'agent.eth',
+          knowledge_context: {},
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
     });
   });
 
@@ -437,7 +598,7 @@ describe('Commit Routes', () => {
   });
 
   describe('GET /repos/:repoId/context-chain', () => {
-    it('should return context chain with agent handoffs', async () => {
+    it('should return context chain with agent handoffs and knowledge briefs', async () => {
       const mockChain = {
         repo_id: 'repo-1',
         total_commits: 5,
@@ -454,6 +615,13 @@ describe('Commit Routes', () => {
                 tags: ['architecture', 'planning'],
                 created_at: '2026-01-01T00:00:00Z',
                 branch_name: 'main',
+                knowledge_context: {
+                  decisions: ['Use React', 'Use backtracking solver'],
+                  architecture: 'Grid → Cell → Solver',
+                  libraries: ['react', 'typescript'],
+                  next_steps: ['Implement grid', 'Build solver'],
+                  handoff_summary: 'Architecture complete. Ready for implementation.',
+                },
               },
               {
                 id: 'commit-2',
@@ -463,9 +631,17 @@ describe('Commit Routes', () => {
                 tags: ['data-model'],
                 created_at: '2026-01-01T01:00:00Z',
                 branch_name: 'main',
+                knowledge_context: null,
               },
             ],
             contribution_summary: 'Defined grid, cell, and solver interfaces',
+            knowledge_brief: {
+              decisions: ['Use React', 'Use backtracking solver'],
+              architecture: 'Grid → Cell → Solver',
+              libraries: ['react', 'typescript'],
+              next_steps: ['Implement grid', 'Build solver'],
+              handoff_summary: 'Architecture complete. Ready for implementation.',
+            },
           },
           {
             agent: { id: 'agent-2', ens_name: 'engineer.eth', role: 'engineer' },
@@ -478,9 +654,21 @@ describe('Commit Routes', () => {
                 tags: ['implementation', 'solver'],
                 created_at: '2026-01-01T02:00:00Z',
                 branch_name: 'main',
+                knowledge_context: {
+                  decisions: ['Constraint propagation before backtracking'],
+                  libraries: ['jest'],
+                  next_steps: ['Add comprehensive tests'],
+                  handoff_summary: 'Solver working. Needs test coverage.',
+                },
               },
             ],
             contribution_summary: 'Implemented backtracking Sudoku solver',
+            knowledge_brief: {
+              decisions: ['Constraint propagation before backtracking'],
+              libraries: ['jest'],
+              next_steps: ['Add comprehensive tests'],
+              handoff_summary: 'Solver working. Needs test coverage.',
+            },
           },
           {
             agent: { id: 'agent-3', ens_name: 'qa.eth', role: 'qa' },
@@ -493,6 +681,7 @@ describe('Commit Routes', () => {
                 tags: ['testing'],
                 created_at: '2026-01-01T03:00:00Z',
                 branch_name: 'main',
+                knowledge_context: null,
               },
               {
                 id: 'commit-5',
@@ -502,9 +691,17 @@ describe('Commit Routes', () => {
                 tags: ['testing', 'edge-cases'],
                 created_at: '2026-01-01T04:00:00Z',
                 branch_name: 'main',
+                knowledge_context: {
+                  decisions: ['100% solver coverage achieved'],
+                  handoff_summary: 'All tests green. Production ready.',
+                },
               },
             ],
             contribution_summary: 'Covered empty grid and invalid input edge cases',
+            knowledge_brief: {
+              decisions: ['100% solver coverage achieved'],
+              handoff_summary: 'All tests green. Production ready.',
+            },
           },
         ],
       };
@@ -524,8 +721,13 @@ describe('Commit Routes', () => {
       expect(body.handoffs).toHaveLength(3);
       expect(body.handoffs[0].agent.ens_name).toBe('architect.eth');
       expect(body.handoffs[0].commits).toHaveLength(2);
+      expect(body.handoffs[0].knowledge_brief).toBeDefined();
+      expect(body.handoffs[0].knowledge_brief.decisions).toHaveLength(2);
+      expect(body.handoffs[0].knowledge_brief.libraries).toEqual(['react', 'typescript']);
       expect(body.handoffs[1].agent.ens_name).toBe('engineer.eth');
+      expect(body.handoffs[1].knowledge_brief.handoff_summary).toContain('Needs test coverage');
       expect(body.handoffs[2].agent.ens_name).toBe('qa.eth');
+      expect(body.handoffs[2].knowledge_brief.handoff_summary).toContain('Production ready');
     });
 
     it('should pass branch filter to SDK', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
@@ -9,6 +9,7 @@
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:v2": "ts-node src/db/migrate_v2.ts",
     "migrate:v3": "ts-node src/db/migrate_v3.ts",
+    "migrate:v4": "ts-node src/db/migrate_v4.ts",
     "test": "jest --coverage"
   },
   "dependencies": {
