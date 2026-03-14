@@ -1,65 +1,67 @@
 @import "tailwindcss";
 
-/* ── GitHub-inspired Dark Theme ─────────────────────────────── */
+/* ── Linear/Vercel-inspired Dark Theme (v5) ────────────────────── */
 
 :root {
   /* Canvas (page background) */
-  --bg-canvas: #0d1117;
+  --bg-canvas: #09090b;
   /* Default (card/surface background) */
-  --bg-default: #161b22;
+  --bg-default: #0a0a0c;
   /* Subtle (hover/secondary surfaces) */
-  --bg-subtle: #1c2128;
+  --bg-subtle: #111113;
   /* Inset (code blocks, inputs) */
-  --bg-inset: #010409;
+  --bg-inset: #06060a;
   /* Overlay (modals, dropdowns) */
-  --bg-overlay: #1c2128;
+  --bg-overlay: #111113;
 
   /* Borders */
-  --border-default: #30363d;
-  --border-muted: #21262d;
-  --border-subtle: #6e768166;
+  --border-default: #1e1e24;
+  --border-muted: #18181b;
+  --border-subtle: #27272a66;
 
   /* Foreground / Text */
-  --fg-default: #e6edf3;
-  --fg-muted: #8b949e;
-  --fg-subtle: #6e7681;
+  --fg-default: #fafafa;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
   --fg-on-emphasis: #ffffff;
 
-  /* Accent (primary action color) */
-  --accent-fg: #58a6ff;
-  --accent-emphasis: #1f6feb;
-  --accent-muted: #388bfd66;
-  --accent-subtle: #388bfd26;
+  /* Accent (primary — violet) */
+  --accent-fg: #8b5cf6;
+  --accent-emphasis: #7c3aed;
+  --accent-muted: #8b5cf666;
+  --accent-subtle: #8b5cf615;
 
   /* Success */
-  --success-fg: #3fb950;
-  --success-emphasis: #238636;
-  --success-muted: #2ea04366;
-  --success-subtle: #2ea04326;
+  --success-fg: #34d399;
+  --success-emphasis: #059669;
+  --success-muted: #34d39966;
+  --success-subtle: #34d39915;
 
   /* Danger */
-  --danger-fg: #f85149;
-  --danger-emphasis: #da3633;
-  --danger-muted: #f8514966;
-  --danger-subtle: #f8514926;
+  --danger-fg: #f87171;
+  --danger-emphasis: #dc2626;
+  --danger-muted: #f8717166;
+  --danger-subtle: #f8717115;
 
   /* Warning */
-  --warning-fg: #d29922;
-  --warning-emphasis: #9e6a03;
-  --warning-muted: #d2992266;
-  --warning-subtle: #d2992226;
+  --warning-fg: #fbbf24;
+  --warning-emphasis: #d97706;
+  --warning-muted: #fbbf2466;
+  --warning-subtle: #fbbf2415;
 
   /* Special / Accent Colors */
-  --purple-fg: #bc8cff;
-  --purple-emphasis: #8957e5;
-  --pink-fg: #f778ba;
-  --coral-fg: #ea6045;
+  --purple-fg: #a78bfa;
+  --purple-emphasis: #7c3aed;
+  --pink-fg: #f472b6;
+  --coral-fg: #fb923c;
+  --indigo-fg: #818cf8;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 0 rgba(27, 31, 36, 0.04);
-  --shadow-md: 0 3px 6px rgba(1, 4, 9, 0.2);
-  --shadow-lg: 0 8px 24px rgba(1, 4, 9, 0.4);
-  --shadow-xl: 0 12px 48px rgba(1, 4, 9, 0.6);
+  /* Shadows — deeper with violet tint */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 24px rgba(139, 92, 246, 0.15);
 }
 
 /* ── Base ────────────────────────────────────────────────────── */
@@ -71,7 +73,7 @@ html {
 body {
   background-color: var(--bg-canvas);
   color: var(--fg-default);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
     Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -114,28 +116,32 @@ body {
 .card {
   background-color: var(--bg-default);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .card-hover:hover {
-  border-color: var(--border-subtle);
-  box-shadow: var(--shadow-md);
+  border-color: var(--accent-muted);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .btn-primary {
-  background-color: var(--accent-emphasis);
+  background: linear-gradient(135deg, var(--accent-emphasis), #6366f1);
   color: var(--fg-on-emphasis);
-  padding: 5px 16px;
-  border-radius: 6px;
+  padding: 6px 18px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid rgba(240, 246, 252, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.2);
 }
 .btn-primary:hover {
-  background-color: #388bfd;
+  background: linear-gradient(135deg, #8b5cf6, #818cf8);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -145,48 +151,48 @@ body {
 .btn-secondary {
   background-color: var(--bg-subtle);
   color: var(--fg-default);
-  padding: 5px 16px;
-  border-radius: 6px;
+  padding: 6px 18px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
   border: 1px solid var(--border-default);
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: all 0.2s;
 }
 .btn-secondary:hover {
   background-color: var(--border-default);
-  border-color: var(--border-subtle);
+  border-color: var(--accent-muted);
 }
 
 .btn-danger {
-  background-color: var(--danger-emphasis);
+  background: linear-gradient(135deg, var(--danger-emphasis), #b91c1c);
   color: var(--fg-on-emphasis);
-  padding: 5px 16px;
-  border-radius: 6px;
+  padding: 6px 18px;
+  border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid rgba(240, 246, 252, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 .btn-danger:hover {
-  background-color: #c93c37;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
 }
 
 .input {
   background-color: var(--bg-inset);
   color: var(--fg-default);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  padding: 5px 12px;
+  border-radius: 8px;
+  padding: 6px 14px;
   font-size: 14px;
   width: 100%;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .input:focus {
   border-color: var(--accent-fg);
   outline: none;
-  box-shadow: 0 0 0 3px var(--accent-subtle);
+  box-shadow: 0 0 0 3px var(--accent-subtle), var(--shadow-glow);
 }
 .input::placeholder {
   color: var(--fg-subtle);
@@ -228,15 +234,15 @@ body {
 }
 
 .badge-purple {
-  background-color: rgba(137, 87, 229, 0.15);
+  background-color: rgba(139, 92, 246, 0.15);
   color: var(--purple-fg);
-  border: 1px solid rgba(137, 87, 229, 0.4);
+  border: 1px solid rgba(139, 92, 246, 0.4);
 }
 
 .badge-gray {
-  background-color: rgba(110, 118, 129, 0.15);
+  background-color: rgba(113, 113, 122, 0.15);
   color: var(--fg-muted);
-  border: 1px solid rgba(110, 118, 129, 0.4);
+  border: 1px solid rgba(113, 113, 122, 0.4);
 }
 
 /* ── Modal Overlay ───────────────────────────────────────────── */
@@ -244,7 +250,9 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(1, 4, 9, 0.8);
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -255,10 +263,10 @@ body {
 .modal-content {
   background-color: var(--bg-overlay);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: 16px;
   padding: 24px;
   width: 100%;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
 }
 
 /* ── Skeleton loading ────────────────────────────────────────── */
@@ -289,4 +297,124 @@ body {
 
 .animate-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+/* ── Markdown Prose Container (v5) ──────────────────────────── */
+
+.prose-container .prose {
+  color: var(--fg-muted);
+  line-height: 1.7;
+}
+
+.prose-container .prose h1,
+.prose-container .prose h2,
+.prose-container .prose h3,
+.prose-container .prose h4 {
+  color: var(--fg-default);
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.prose-container .prose h1 { font-size: 1.5em; }
+.prose-container .prose h2 { font-size: 1.3em; }
+.prose-container .prose h3 { font-size: 1.15em; }
+
+.prose-container .prose p {
+  margin-bottom: 0.75em;
+}
+
+.prose-container .prose a {
+  color: var(--accent-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-container .prose code {
+  background-color: var(--bg-subtle);
+  color: var(--purple-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+.prose-container .prose pre {
+  background-color: var(--bg-canvas);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.prose-container .prose pre code {
+  background: none;
+  padding: 0;
+  color: var(--fg-muted);
+}
+
+.prose-container .prose blockquote {
+  border-left: 3px solid var(--accent-fg);
+  padding-left: 1em;
+  color: var(--fg-subtle);
+  margin: 0.75em 0;
+}
+
+.prose-container .prose ul,
+.prose-container .prose ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.prose-container .prose li {
+  margin-bottom: 0.25em;
+}
+
+.prose-container .prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+}
+
+.prose-container .prose th,
+.prose-container .prose td {
+  border: 1px solid var(--border-default);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.prose-container .prose th {
+  background-color: var(--bg-subtle);
+  color: var(--fg-default);
+  font-weight: 600;
+}
+
+.prose-container .prose hr {
+  border: none;
+  border-top: 1px solid var(--border-muted);
+  margin: 1.5em 0;
+}
+
+.prose-container .prose img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* ── Glass effect for specific elements ──────────────────────── */
+
+.glass {
+  background: rgba(10, 10, 12, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Gradient text utility ───────────────────────────────────── */
+
+.text-gradient {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
