@@ -708,19 +708,19 @@ export default function LeaderboardPage() {
                         className="px-4 py-3 text-right"
                         style={{ color: "var(--fg-muted)" }}
                       >
-                        {(entry.code_quality ?? 0).toFixed(1)}
+                        {Number(entry.code_quality ?? 0).toFixed(1)}
                       </td>
                       <td
                         className="px-4 py-3 text-right"
                         style={{ color: "var(--fg-muted)" }}
                       >
-                        {(entry.test_pass_rate ?? 0).toFixed(1)}
+                        {Number(entry.test_pass_rate ?? 0).toFixed(1)}
                       </td>
                       <td
                         className="px-4 py-3 text-right"
-                        style={{ color: entry.academic_contribution > 0 ? "#60a5fa" : "var(--fg-muted)" }}
+                        style={{ color: Number(entry.academic_contribution ?? 0) > 0 ? "#60a5fa" : "var(--fg-muted)" }}
                       >
-                        {(entry.academic_contribution ?? 0).toFixed(1)}
+                        {Number(entry.academic_contribution ?? 0).toFixed(1)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className="inline-flex justify-center">

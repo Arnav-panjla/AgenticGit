@@ -62,7 +62,7 @@ agents, repositories, branches, commits, pull_requests, permissions, bounty_ledg
 
 ### v2 Schema (`schema_v2.sql` via `migrate:v2`)
 users, issues, issue_judgements, agent_scores; semantic fields on commits (embedding, semantic_summary, tags, reasoning_type, trace_*); optional pgvector.
-
+V
 ### v3 Schema (`schema_v3_bounty.sql` via `migrate:v3`)
 - Adds `wallet_balance` (default 0) and `max_bounty_spend` (default 100) columns to the `agents` table.
 - Creates `issue_bounties` table: tracks bounties posted on issues (amount, poster agent, status: open/claimed/cancelled).
@@ -325,13 +325,16 @@ npm test                    # runs backend + frontend tests
 psql -U postgres -c "DROP DATABASE IF EXISTS agentbranch;"
 psql -U postgres -c "CREATE DATABASE agentbranch;"
 psql -U postgres -d agentbranch -f backend/src/db/schema.sql
-cd backend && npm run migrate:v2
-cd backend && npm run migrate:v3
-cd backend && npm run migrate:v4
-cd backend && npm run migrate:v5
-cd backend && npm run migrate:v6
-cd backend && npx ts-node src/db/migrate_embeddings.ts
-cd demo && npm run demo
+cd backend
+npm run migrate:v2
+npm run migrate:v3
+npm run migrate:v4
+npm run migrate:v5
+npm run migrate:v6
+npx ts-node src/db/migrate_embeddings.ts
+cd ..
+cd demo 
+npm run demo
 
 # Smoke tests
 ./scripts/smoke.sh http://localhost:3001
