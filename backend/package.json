@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
@@ -15,7 +15,13 @@
     "test": "jest --coverage"
   },
   "dependencies": {
+    "@bitgo/sdk-coin-eth": "^25.6.6",
+    "@bitgo/sdk-core": "^36.34.0",
     "@fastify/cors": "^9.0.1",
+    "@x402/core": "^2.6.0",
+    "@x402/evm": "^2.6.0",
+    "@x402/express": "^2.6.0",
+    "@x402/fetch": "^2.6.0",
     "ansi-styles": "^4.3.0",
     "bcryptjs": "^3.0.3",
     "binary-extensions": "^3.1.0",

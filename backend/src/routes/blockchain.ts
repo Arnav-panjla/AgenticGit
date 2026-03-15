@@ -1,7 +1,8 @@
 /**
- * Blockchain Routes
+ * Blockchain Routes (v7)
  * 
  * Agent registration with ABT deposit verification.
+ * Now includes BitGo wallet management and Base Sepolia config.
  */
 
 import { FastifyInstance } from 'fastify';
@@ -14,8 +15,18 @@ import {
   getRequiredDeposit,
   getTreasuryAddress,
   generateMockTxHash,
+  getBlockchainConfig,
 } from '../services/blockchain';
 import { validateEnsName } from '../services/ens';
+import {
+  createAgentWallet,
+  getAgentWallet,
+  getAgentWalletBalance,
+  sendTransaction,
+  listAgentWallets,
+  isBitGoEnabled,
+  getBitGoConfig,
+} from '../services/bitgo-wallet';
 
 interface Agent {
   id: string;
@@ -31,18 +42,15 @@ interface Agent {
 
 export async function blockchainRoutes(app: FastifyInstance) {
   /**
-   * Get blockchain configuration
+   * Get blockchain configuration (v7: Base Sepolia + BitGo)
    */
   app.get('/config', async (_req, reply) => {
     const tokenInfo = await getTokenInfo();
 
     return {
-      enabled: isBlockchainEnabled(),
-      required_deposit: getRequiredDeposit(),
-      treasury_address: getTreasuryAddress(),
+      ...getBlockchainConfig(),
       token: tokenInfo,
-      network: 'sepolia',
-      chain_id: 11155111,
+      bitgo: getBitGoConfig(),
     };
   });
 
@@ -157,6 +165,98 @@ export async function blockchainRoutes(app: FastifyInstance) {
         block: verification.blockNumber,
       },
     });
+  });
+
+  // ─── BitGo Wallet Routes (v7) ──────────────────────────────────────────────
+
+  /**
+   * Create a BitGo wallet for an agent
+   */
+  app.post('/wallets/create', { preHandler: requireAuth }, async (req, reply) => {
+    const { agent_id, label } = req.body as any;
+
+    if (!agent_id || !label) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        message: 'agent_id and label are required',
+      });
+    }
+
+    try {
+      const wallet = await createAgentWallet(agent_id, label);
+      return reply.status(201).send({
+        message: 'Wallet created',
+        wallet,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        error: 'Wallet creation failed',
+        message: err.message,
+      });
+    }
+  });
+
+  /**
+   * Get wallet info for an agent
+   */
+  app.get('/wallets/:agentId', async (req, reply) => {
+    const { agentId } = req.params as any;
+    const wallet = getAgentWallet(agentId);
+
+    if (!wallet) {
+      return reply.status(404).send({ error: 'No wallet found for this agent' });
+    }
+
+    return wallet;
+  });
+
+  /**
+   * Get wallet balance for an agent
+   */
+  app.get('/wallets/:agentId/balance', async (req, reply) => {
+    const { agentId } = req.params as any;
+    const balance = await getAgentWalletBalance(agentId);
+
+    if (!balance) {
+      return reply.status(404).send({ error: 'No wallet found for this agent' });
+    }
+
+    return balance;
+  });
+
+  /**
+   * Send a transaction from an agent's wallet
+   */
+  app.post('/wallets/:agentId/send', { preHandler: requireAuth }, async (req, reply) => {
+    const { agentId } = req.params as any;
+    const { to_address, amount_wei, note } = req.body as any;
+
+    if (!to_address || !amount_wei) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        message: 'to_address and amount_wei are required',
+      });
+    }
+
+    try {
+      const result = await sendTransaction(agentId, to_address, amount_wei, note);
+      return { message: 'Transaction sent', transaction: result };
+    } catch (err: any) {
+      return reply.status(400).send({
+        error: 'Transaction failed',
+        message: err.message,
+      });
+    }
+  });
+
+  /**
+   * List all agent wallets (admin/debug)
+   */
+  app.get('/wallets', async () => {
+    return {
+      bitgo_enabled: isBitGoEnabled(),
+      wallets: listAgentWallets(),
+    };
   });
 
   /**

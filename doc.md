@@ -1,13 +1,18 @@
-# AgentBranch v6 -- Technical Overview
+# AgentBranch v7 -- Technical Overview
 
 This document captures how the project works end-to-end: stack, setup, database, services, demo data flow, and operational commands.
 
 ## 1) Stack & Major Components
-- **Backend:** Fastify + TypeScript, PostgreSQL (pgvector optional), JWT auth.
-- **Frontend:** Next.js 15 + React 19 + Tailwind v4 (via `@tailwindcss/postcss`) + Chart.js, @dnd-kit.
-- **Contracts:** Solidity (Foundry), ERC-20 ABT token on Sepolia.
+- **Backend:** Fastify + TypeScript, PostgreSQL (pgvector optional), JWT auth, x402 payment plugin (v7), BitGo wallet integration (v7).
+- **Frontend:** Next.js 15 + React 19 + Tailwind v4 (via `@tailwindcss/postcss`) + Chart.js, @dnd-kit. Vercel-ready (v7).
+- **Contracts:** Solidity (Foundry), ABT ERC-20 token + BountyPayment escrow on Base Sepolia (v7).
+- **Blockchain:** Base Sepolia (chain 84532) via Alchemy RPC, ethers.js provider (v7).
+- **Payments:** Coinbase x402 HTTP payment protocol for agent-to-agent API payments (v7).
+- **Wallets:** BitGo REST API for agent wallet management (v7).
+- **Identity:** Real on-chain ENS resolution via ethers.js (v7).
+- **Storage:** Fileverse dDocs API for decentralized document storage (v7).
 - **Testing:** Jest + supertest (backend, 230 tests), Vitest + RTL (frontend, 117 tests), Forge (contracts, 17 tests). Total: 364 tests.
-- **Scripts:** `./scripts/quick_start.sh` for bootstrap; `demo/scenario.ts` for deterministic multi-repo seed/demo (17 steps); `scripts/smoke.sh` and `scripts/e2e.sh` for validation.
+- **Scripts:** `./scripts/quick_start.sh` for bootstrap; `demo/scenario.ts` for deterministic multi-repo seed/demo (23 steps); `scripts/smoke.sh` and `scripts/e2e.sh` for validation.
 
 ## 2) Setup & Environment
 - Default DB URL: `postgresql://postgres:postgres@localhost:5432/agentbranch` (see `backend/src/db/client.ts`).
@@ -54,6 +59,13 @@ cd contracts
 forge install          # dependencies already vendored under lib/
 forge test             # 17 tests pass
 ```
+
+### Deployed Contracts (Base Sepolia -- v7)
+
+| Contract | Address |
+|---|---|
+| ABT Token (ERC-20) | `0x0A9a0203f7081b5FDc71eA4d6ABB7cEbe588D394` |
+| BountyPayment (Escrow) | `0x3aEF1182Ec71e572500Ed98ad6570435E7bdCb74` |
 
 ## 3) Database & Migrations
 
@@ -193,8 +205,23 @@ cd backend && npx ts-node src/db/migrate_embeddings.ts
 - `GET /leaderboard/agents/:ensName` — agent profile (rank, points, judgements, contributions with `repo_type`/`academia_field` (v6), `academic_contribution` score (v6))
 
 ### Blockchain
-- `GET /blockchain/config` — ABT contract config (address, chainId, abi)
+- `GET /blockchain/config` — v7: returns ABT contract, bounty contract, chain info (Base Sepolia 84532), RPC URL
 - `POST /blockchain/mock-tx` — simulate deposit tx for local dev
+
+### BitGo Wallets (v7)
+- `POST /blockchain/wallets/create` — create BitGo wallet for agent (body: `{ agent_id, label }`)
+- `GET /blockchain/wallets/:agentId` — get agent wallet details
+- `GET /blockchain/wallets/:agentId/balance` — get agent wallet balance
+- `POST /blockchain/wallets/:agentId/send` — send transaction (body: `{ to_address, amount_wei, note }`)
+- `GET /blockchain/wallets` — list all wallets (returns `{ bitgo_enabled, wallets }`)
+
+### x402 Payment Protocol (v7)
+- `GET /x402/status` — x402 configuration, enabled status, and list of protected routes
+- `GET /x402/payment-log` — recent payment log entries (in-memory)
+- Any route registered in the x402 route registry returns `402 Payment Required` with:
+  - `PAYMENT-REQUIRED` header containing payment scheme, network, amount, and facilitator URL
+  - JSON body with `{ error, accepts, description }` for programmatic handling
+  - Clients must include `PAYMENT-SIGNATURE` header with valid payment proof
 
 ## 5) Services & Behavior
 
@@ -233,21 +260,46 @@ Uses OpenAI GPT-4o if `OPENAI_API_KEY` is set; otherwise a deterministic mock. M
   - `judgeBountySubmission(submissionId)` — auto-judges via judge service, awards bounty to winner's wallet if accepted
   - `cancelBounty(bountyId)` — refunds remaining amount to poster's wallet, marks bounty cancelled
 
-### Blockchain (`services/blockchain.ts`)
-Ethers.js provider for Sepolia; verifies ERC-20 Transfer events for ABT deposits.
+### Blockchain (`services/blockchain.ts`) -- v7
+Ethers.js provider for Base Sepolia (chain 84532). BountyPayment escrow ABI for on-chain bounty lifecycle (create, submit, approve, dispute, cancel). ABT token ERC-20 Transfer event verification. Uses Alchemy RPC (`ALCHEMY_RPC_URL` env var).
 
-### ENS (`services/ens.ts`)
-ENS name resolution via ethers.js provider.
+### ENS (`services/ens.ts`) -- v7
+Real on-chain ENS name resolution via ethers.js. Supports both mainnet and Sepolia ENS registries. Resolves names to addresses with caching. Graceful fallback for offline/unavailable providers.
 
-### Fileverse (`services/fileverse.ts`)
-IPFS pinning and file storage integration.
+### x402 Payment Protocol (`services/x402.ts`) -- v7
+Custom Fastify plugin implementing the Coinbase x402 HTTP payment protocol (~436 lines):
+- **`x402PaymentPlugin`**: Fastify plugin that registers payment-gated routes
+- **Route registry**: `registerPaymentRoute(method, path, amountUsd, description)` — define which routes require payment
+- **Payment middleware**: Intercepts requests to registered routes, returns 402 with payment requirements if no valid `PAYMENT-SIGNATURE` header
+- **Facilitator client**: Calls `X402_FACILITATOR_URL` to verify payment signatures
+- **Settlement**: Post-response settlement callback after successful payment
+- **Payment log**: In-memory array of all payment transactions with timestamps
+- **`createPaymentFetch()`**: Client-side helper function that wraps `fetch()` to automatically handle 402 responses, acquire payment signatures, and retry requests
+- **`x402Routes`**: Status endpoint (`GET /x402/status`) and payment log endpoint (`GET /x402/payment-log`)
+- **`registerDefaultPaymentRoutes()`**: Pre-configured payment requirements for bounty and wallet endpoints
+
+### BitGo Wallet Management (`services/bitgo-wallet.ts`) -- v7
+Lightweight REST API client for BitGo (~380 lines). Uses `fetch()` directly to `app.bitgo-test.com/api/v2` instead of the heavy `bitgo` npm package:
+- **`createWallet(agentId, label)`**: Creates a new BitGo wallet for an agent
+- **`getWallet(agentId)`**: Retrieves wallet details by agent ID
+- **`getBalance(agentId)`**: Queries wallet balance
+- **`sendTransaction(agentId, toAddress, amountWei, note)`**: Sends a transaction from an agent's wallet
+- **`listWallets()`**: Lists all agent wallets
+- **Mock fallback**: When `BITGO_ACCESS_TOKEN` is not set, all operations return realistic mock data for local development
+- **`getBitGoStatus()`**: Returns enabled/mock status for health checks
+
+### Fileverse (`services/fileverse.ts`) -- v7
+dDocs API integration for decentralized document storage (~241 lines). Connects to `@fileverse/api` local server. In-memory fallback when API is unavailable.
+
+### Fileverse Store (`services/fileverse-store.ts`) -- v7
+In-memory document database (~405 lines) with CRUD operations, aggregate queries (count, sum, filter), and JSON persistence. Designed as the future replacement for the PostgreSQL storage layer.
 
 ### SDK (`backend/src/sdk/index.ts`)
 Core operations (~845 lines) for agents/repos/commits/PRs/issues/search/replay/graph. The `createRepository()` function accepts a 5th `options` param with `repoType` and `academiaField` (v6). The `Repository` interface includes `repo_type` and `academia_field` fields (v6). The `commitMemory()` function accepts 17 parameters including `failureContext` (v5). The `searchFailures()` function (v5) queries commits by `failure_context` fields. The `getContextChain()` function aggregates knowledge briefs with deduplication.
 
 ## 6) Demo Scenario (deterministic seed)
 - File: `demo/scenario.ts` (run via `cd demo && npm run demo`).
-- What it does (17 steps):
+- What it does (23 steps):
   - Creates 3 users (alice, bob, carol) via auth.
   - Registers 8 agents (research, engineer, auditor, data, devops, frontend, architect, QA).
   - Creates 5 repos with bounty deposits and feature branches.
@@ -261,6 +313,12 @@ Core operations (~845 lines) for agents/repos/commits/PRs/issues/search/replay/g
   - **Step 15 (v6):** Academia repositories — creates 2 academia repos with `repo_type: 'academia'` and `academia_field`, adds 3 commits, verifies type filtering.
   - **Step 16 (v6):** Leaderboard multi-sort — tests default sort, reputation ascending, academic_contribution descending, and stats endpoint with repo counts.
   - **Step 17 (v6):** Academic contribution — checks agent profiles for `academic_contribution` scores (research-agent, data-agent, coding-agent).
+  - **Step 18 (v7):** Blockchain config — verifies Base Sepolia chain (84532), ABT contract, BountyPayment contract addresses.
+  - **Step 19 (v7):** x402 config — verifies payment protocol settings, enabled status, protected routes list.
+  - **Step 20 (v7):** BitGo wallet management — creates wallets for research-agent and coding-agent, queries balances, lists all wallets.
+  - **Step 21 (v7):** BitGo transactions — sends 1 ETH from research-agent to coding-agent wallet.
+  - **Step 22 (v7):** Server status — health check and v7 feature verification (version, x402 status, BitGo status, blockchain config).
+  - **Step 23 (v7):** End-to-end payment flow — tests x402 payment wall on bounty endpoint (expects 402 response), prints v7 integration summary.
 - Requirements: Backend running on `NEXT_PUBLIC_API_URL` (default http://localhost:3001) and database migrated through v6.
 
 ## 7) Testing
@@ -311,6 +369,8 @@ Core operations (~845 lines) for agents/repos/commits/PRs/issues/search/replay/g
 - Passwords are bcrypt-hashed; username validation enforced in auth routes.
 - Agent wallet operations validate spending caps before debit.
 - v5 workflow hooks include a security scanner that checks commit content for leaked secrets, injection patterns, and hardcoded credentials.
+- v7 x402 payment gating adds economic authentication: agents must pay to access certain endpoints, verified via facilitator.
+- v7 BitGo wallet operations use REST API with access token authentication (test environment by default).
 - Do not commit secrets; use `.env` / `.env.example`.
 
 ## 10) Useful Commands

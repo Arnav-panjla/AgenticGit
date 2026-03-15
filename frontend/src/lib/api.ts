@@ -501,7 +501,7 @@ export const authApi = {
 };
 
 export const blockchainApi = {
-  config: () => api.get<Record<string, unknown>>("/blockchain/config"),
+  config: () => api.get<BlockchainConfig>("/blockchain/config"),
   registerAgent: (data: {
     ens_name: string;
     role: string;
@@ -509,4 +509,150 @@ export const blockchainApi = {
     tx_hash: string;
   }) => api.post<Agent>("/blockchain/register-agent", data),
   mockTx: () => api.post<{ tx_hash: string }>("/blockchain/mock-tx"),
+};
+
+// ── v7 Types: BitGo Wallets ──────────────────────────────────
+
+/** Matches backend AgentWallet shape from bitgo-wallet.ts */
+export interface BitGoWallet {
+  walletId: string;
+  address: string;
+  coin: string;
+  label: string;
+  createdAt: string;
+}
+
+/** Matches backend WalletListItem shape (GET /blockchain/wallets) */
+export interface BitGoWalletListItem {
+  walletId: string;
+  address: string;
+  label: string;
+  balance: string;
+}
+
+/** Matches backend WalletBalance shape */
+export interface BitGoBalance {
+  walletId: string;
+  address: string;
+  coin: string;
+  balance: string;
+  balanceFormatted: string;
+  confirmedBalance: string;
+  spendableBalance: string;
+}
+
+/** Matches backend TransactionResult shape */
+export interface BitGoSendResult {
+  txId: string;
+  txHash: string;
+  status: string;
+  from: string;
+  to: string;
+  amount: string;
+  coin: string;
+  fee?: string;
+}
+
+/** Matches backend getBitGoConfig() shape */
+export interface BitGoConfig {
+  enabled: boolean;
+  env: string;
+  coin: string;
+  apiBase: string;
+  enterpriseId: string | null;
+  walletCount: number;
+}
+
+// ── v7 Types: x402 Payment Protocol ──────────────────────────
+
+export interface X402Config {
+  enabled: boolean;
+  facilitator: string;
+  network: string;
+  treasury: string;
+  protectedRoutes: {
+    route: string;
+    price: string;
+    description: string;
+  }[];
+}
+
+export interface X402PaymentRecord {
+  id: string;
+  route: string;
+  payerAddress: string;
+  amount: string;
+  network: string;
+  txHash: string | null;
+  settledAt: string;
+  status: "verified" | "settled" | "failed";
+}
+
+export interface X402PaymentStats {
+  totalPayments: number;
+  settled: number;
+  failed: number;
+  byRoute: Record<string, number>;
+}
+
+// ── v7 Types: Blockchain Config ──────────────────────────────
+
+/** Matches backend GET /blockchain/config response shape exactly */
+export interface BlockchainConfig {
+  chain: string;
+  chainId: number;
+  rpcUrl: string;
+  abtContract: string | null;
+  bountyContract: string | null;
+  treasury: string;
+  requiredDeposit: string;
+  blockchainEnabled: boolean;
+  bountyContractEnabled: boolean;
+  token: {
+    name: string;
+    symbol: string;
+    decimals: number;
+    contractAddress: string;
+  } | null;
+  bitgo: BitGoConfig;
+}
+
+// ── v7 API: BitGo Wallets ────────────────────────────────────
+
+export const bitgoWalletApi = {
+  /** Create a new BitGo wallet for an agent */
+  create: (agentId: string, label: string) =>
+    api.post<{ message: string; wallet: BitGoWallet }>(
+      "/blockchain/wallets/create",
+      { agent_id: agentId, label }
+    ),
+  /** Get wallet info for an agent */
+  get: (agentId: string) =>
+    api.get<BitGoWallet>(`/blockchain/wallets/${agentId}`),
+  /** Get wallet balance for an agent */
+  balance: (agentId: string) =>
+    api.get<BitGoBalance>(`/blockchain/wallets/${agentId}/balance`),
+  /** Send a transaction from an agent's wallet */
+  send: (agentId: string, toAddress: string, amountWei: string, note?: string) =>
+    api.post<{ message: string; transaction: BitGoSendResult }>(
+      `/blockchain/wallets/${agentId}/send`,
+      { to_address: toAddress, amount_wei: amountWei, note }
+    ),
+  /** List all agent wallets */
+  list: () =>
+    api.get<{ bitgo_enabled: boolean; wallets: BitGoWalletListItem[] }>(
+      "/blockchain/wallets"
+    ),
+};
+
+// ── v7 API: x402 Payment Protocol ────────────────────────────
+
+export const x402Api = {
+  /** Get x402 configuration and protected routes */
+  config: () => api.get<X402Config>("/x402/config"),
+  /** Get recent payment log */
+  payments: () =>
+    api.get<{ total: number; payments: X402PaymentRecord[] }>("/x402/payments"),
+  /** Get payment statistics */
+  stats: () => api.get<X402PaymentStats>("/x402/payments/stats"),
 };

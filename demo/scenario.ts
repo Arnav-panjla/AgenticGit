@@ -1,5 +1,5 @@
 /**
- * AgentBranch Demo Scenario v6
+ * AgentBranch Demo Scenario v7
  *
  * Deterministic, multi-repo, multi-agent walkthrough that exercises:
  * - Auth (3 users)
@@ -14,6 +14,10 @@
  * - **Failure memory** — tagging and searching failed approaches (v5)
  * - **Workflow hooks** — async security scan, quality, and knowledge checks (v5)
  * - **Academia repos, leaderboard multi-sort, academic contribution** (v6)
+ * - **Base Sepolia blockchain config** (v7)
+ * - **x402 payment protocol** (v7)
+ * - **BitGo wallet management** (v7)
+ * - **ENS on-chain resolution** (v7)
  *
  * Run against a live backend (API base from NEXT_PUBLIC_API_URL or http://localhost:3001):
  *   npm run demo
@@ -385,7 +389,7 @@ const issues = [
 
 async function runDemo() {
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
-  console.log('║              AgentBranch — Multi-Repo Demo v5                    ║');
+  console.log('║              AgentBranch — Multi-Repo Demo v7                    ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 
   // Step 1: Register/login users
@@ -1506,6 +1510,190 @@ const BRIDGE_CONFIG = {
 
   // ─── Complete ───────────────────────────────────────────────────────────────
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 18 — Base Sepolia Blockchain Config (v7)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 18: Verifying Base Sepolia blockchain configuration...');
+
+  // 18a: Get blockchain config (should show Base Sepolia chain 84532)
+  const blockchainConfig = await get('/blockchain/config');
+  log('18a: Blockchain config', {
+    chain: blockchainConfig.chain,
+    chainId: blockchainConfig.chainId,
+    blockchainEnabled: blockchainConfig.blockchainEnabled,
+    bountyContractEnabled: blockchainConfig.bountyContractEnabled,
+    abtContract: blockchainConfig.abtContract,
+    bountyContract: blockchainConfig.bountyContract,
+    requiredDeposit: blockchainConfig.requiredDeposit,
+    bitgo: blockchainConfig.bitgo,
+  });
+
+  // 18b: Generate a mock tx hash (for demo mode)
+  try {
+    const mockTx = await post('/blockchain/mock-tx', {});
+    log('18b: Mock transaction hash', mockTx);
+  } catch (e: any) {
+    log('18b: Mock tx not available (blockchain enabled)', { message: e.message });
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 19 — x402 Payment Protocol (v7)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 19: Testing x402 payment protocol integration...');
+
+  // 19a: Get x402 config
+  const x402Config = await get('/x402/config');
+  log('19a: x402 payment config', {
+    enabled: x402Config.enabled,
+    facilitator: x402Config.facilitator,
+    network: x402Config.network,
+    protectedRoutes: x402Config.protectedRoutes,
+  });
+
+  // 19b: Get payment stats
+  const paymentStats = await get('/x402/payments/stats');
+  log('19b: Payment statistics', paymentStats);
+
+  // 19c: Get recent payments log
+  const payments = await get('/x402/payments');
+  log('19c: Payment log', {
+    total: payments.total,
+    recentCount: payments.payments.length,
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 20 — BitGo Wallet Management (v7)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 20: Testing BitGo wallet management...');
+
+  // 20a: List wallets (initially empty)
+  const walletList = await get('/blockchain/wallets');
+  log('20a: Wallet list (initial)', {
+    bitgo_enabled: walletList.bitgo_enabled,
+    walletCount: walletList.wallets.length,
+  });
+
+  // 20b: Create a wallet for research-agent
+  const wallet1 = await post('/blockchain/wallets/create', {
+    agent_id: 'research-agent-id',
+    label: 'research-agent.eth',
+  }, tokens.alice);
+  log('20b: Created wallet for research-agent', wallet1);
+
+  // 20c: Create a wallet for coding-agent
+  const wallet2 = await post('/blockchain/wallets/create', {
+    agent_id: 'coding-agent-id',
+    label: 'coding-agent.eth',
+  }, tokens.alice);
+  log('20c: Created wallet for coding-agent', wallet2);
+
+  // 20d: Get wallet balance
+  const balance = await get(`/blockchain/wallets/research-agent-id/balance`);
+  log('20d: Wallet balance for research-agent', balance);
+
+  // 20e: List wallets (now has 2)
+  const walletList2 = await get('/blockchain/wallets');
+  log('20e: Wallet list (after creation)', {
+    bitgo_enabled: walletList2.bitgo_enabled,
+    walletCount: walletList2.wallets.length,
+    wallets: walletList2.wallets,
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 21 — BitGo Transaction (v7)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 21: Testing BitGo wallet transactions...');
+
+  // 21a: Send a transaction from research-agent to coding-agent
+  const txResult = await post(`/blockchain/wallets/research-agent-id/send`, {
+    to_address: wallet2.wallet.address,
+    amount_wei: '1000000000000000000', // 1 ETH
+    note: 'Bounty payout for code review',
+  }, tokens.alice);
+  log('21a: Transaction result', txResult);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 22 — Server Status (v7 features)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 22: Verifying v7 server status...');
+
+  // 22a: Health check
+  const health = await get('/health');
+  log('22a: Health check', health);
+
+  // 22b: Full status
+  const status = await get('/status');
+  log('22b: Server status (v7)', {
+    version: status.version,
+    features: status.features,
+    blockchain: {
+      chain: status.blockchain?.chain,
+      chainId: status.blockchain?.chainId,
+    },
+    x402: status.x402,
+    bitgo: status.bitgo,
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Step 23 — End-to-End v7 Payment Flow (x402 + BitGo)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  console.log('\n\nStep 23: End-to-end v7 integration verification...');
+
+  // 23a: Verify x402 protects bounty posting
+  //      Attempt to POST a bounty without PAYMENT-SIGNATURE → should get 402
+  try {
+    const bountyRes = await fetch(`${BASE_URL}/repositories/${repoMap[repos[0].name].id}/issues/test-issue/bounty`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: 100 }),
+    });
+
+    if (bountyRes.status === 402) {
+      const paymentRequired = await bountyRes.json();
+      log('23a: x402 payment wall triggered (402 Payment Required)', {
+        status: bountyRes.status,
+        error: paymentRequired.error,
+        accepts: paymentRequired.accepts,
+        description: paymentRequired.description,
+      });
+    } else {
+      log('23a: Bounty endpoint response', {
+        status: bountyRes.status,
+        note: 'x402 may not be protecting this route in current config',
+      });
+    }
+  } catch (e: any) {
+    log('23a: x402 flow test error', { error: e.message });
+  }
+
+  // 23b: Verify end-to-end integration summary
+  log('23b: v7 Integration Summary', {
+    blockchain: {
+      chain: 'Base Sepolia (84532)',
+      abtContract: blockchainConfig.abtContract,
+      bountyContract: blockchainConfig.bountyContract,
+    },
+    x402: {
+      enabled: x402Config.enabled,
+      network: x402Config.network,
+      protectedRoutes: x402Config.protectedRoutes?.length || 0,
+    },
+    bitgo: {
+      enabled: walletList.bitgo_enabled,
+      walletsCreated: walletList2.wallets.length,
+    },
+    server: {
+      version: health.version || status.version,
+      status: health.status,
+    },
+  });
+
   console.log('\n╔══════════════════════════════════════════════════════════════════╗');
   console.log('║  Demo complete!                                                  ║');
   console.log('║  - Multi-repo, multi-agent flow (Steps 1-10)                     ║');
@@ -1516,6 +1704,12 @@ const BRIDGE_CONFIG = {
   console.log('║  - Academia repos & type filtering (Step 15) [v6]                 ║');
   console.log('║  - Leaderboard multi-sort (Step 16) [v6]                          ║');
   console.log('║  - Agent academic contribution profiles (Step 17) [v6]            ║');
+  console.log('║  - Base Sepolia blockchain config (Step 18) [v7]                  ║');
+  console.log('║  - x402 payment protocol (Step 19) [v7]                           ║');
+  console.log('║  - BitGo wallet management (Step 20) [v7]                         ║');
+  console.log('║  - BitGo transactions (Step 21) [v7]                              ║');
+  console.log('║  - Server status v7 features (Step 22) [v7]                       ║');
+  console.log('║  - End-to-end v7 payment flow (Step 23) [v7]                      ║');
   console.log('╚══════════════════════════════════════════════════════════════════╝\n');
 }
 

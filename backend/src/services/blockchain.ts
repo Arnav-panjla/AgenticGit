@@ -1,16 +1,23 @@
 /**
- * Blockchain Service
+ * Blockchain Service (v7)
  * 
- * Verifies ABT (AgentBranchToken) deposits on Sepolia testnet.
- * Uses ethers.js v6 to interact with the blockchain.
+ * Verifies ABT (AgentBranchToken) deposits on Base Sepolia.
+ * Interacts with both ABT and BountyPayment contracts.
+ * Uses ethers.js v6.
  */
 
 import { ethers, JsonRpcProvider, Contract } from 'ethers';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
+/** Base Sepolia (chain 84532) — primary chain for v7 */
+const BASE_SEPOLIA_RPC_URL = process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org';
+
+/** Fallback to old Sepolia RPC if Base Sepolia not set */
+const RPC_URL = BASE_SEPOLIA_RPC_URL || process.env.SEPOLIA_RPC_URL;
+
 const ABT_CONTRACT_ADDRESS = process.env.ABT_CONTRACT_ADDRESS;
+const BOUNTY_CONTRACT_ADDRESS = process.env.BOUNTY_CONTRACT_ADDRESS;
 const REQUIRED_DEPOSIT = BigInt(process.env.AGENT_DEPOSIT_AMOUNT || '50') * BigInt(10 ** 18);
 
 // ERC-20 Transfer event ABI
@@ -22,18 +29,33 @@ const ERC20_ABI = [
   'function name() view returns (string)',
 ];
 
+// BountyPayment ABI (read functions)
+const BOUNTY_ABI = [
+  'function getBounty(uint256 bountyId) view returns (address poster, uint256 amount, uint256 deadline, address winner, uint8 status, string issueId)',
+  'function isBountyActive(uint256 bountyId) view returns (bool)',
+  'function totalEscrowed() view returns (uint256)',
+  'function nextBountyId() view returns (uint256)',
+  'event BountyCreated(uint256 indexed bountyId, address indexed poster, uint256 amount, uint256 deadline, string issueId)',
+  'event BountyAwarded(uint256 indexed bountyId, address indexed winner, uint256 amount)',
+  'event BountyCancelled(uint256 indexed bountyId, address indexed poster, uint256 refundAmount, uint256 feeAmount)',
+];
+
 // Treasury address where deposits are sent
-const TREASURY_ADDRESS = '0x000000000000000000000000000000000000dEaD'; // Burn address for demo
+const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || '0x000000000000000000000000000000000000dEaD';
 
 // Initialize provider if RPC URL is available
 let provider: JsonRpcProvider | null = null;
 let abtContract: Contract | null = null;
+let bountyContract: Contract | null = null;
 
-if (SEPOLIA_RPC_URL && ABT_CONTRACT_ADDRESS) {
+if (RPC_URL && ABT_CONTRACT_ADDRESS) {
   try {
-    provider = new JsonRpcProvider(SEPOLIA_RPC_URL);
+    provider = new JsonRpcProvider(RPC_URL);
     abtContract = new Contract(ABT_CONTRACT_ADDRESS, ERC20_ABI, provider);
-    console.log('Blockchain service initialized for Sepolia');
+    if (BOUNTY_CONTRACT_ADDRESS) {
+      bountyContract = new Contract(BOUNTY_CONTRACT_ADDRESS, BOUNTY_ABI, provider);
+    }
+    console.log('Blockchain service initialized for Base Sepolia (chain 84532)');
   } catch (error: any) {
     console.error('Failed to initialize blockchain service:', error.message);
   }
@@ -298,4 +320,96 @@ export function generateMockTxHash(): string {
     randomBytes[i] = Math.floor(Math.random() * 256);
   }
   return '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ─── BountyPayment Contract Functions (v7) ───────────────────────────────────
+
+export interface OnChainBounty {
+  poster: string;
+  amount: string;
+  amountFormatted: string;
+  deadline: number;
+  winner: string;
+  status: number; // 0=Active, 1=Awarded, 2=Cancelled, 3=Expired
+  statusLabel: string;
+  issueId: string;
+}
+
+const BOUNTY_STATUS_LABELS = ['Active', 'Awarded', 'Cancelled', 'Expired'];
+
+/**
+ * Check if BountyPayment contract is available
+ */
+export function isBountyContractEnabled(): boolean {
+  return bountyContract !== null;
+}
+
+/**
+ * Get on-chain bounty details
+ */
+export async function getOnChainBounty(bountyId: number): Promise<OnChainBounty | null> {
+  if (!bountyContract) return null;
+
+  try {
+    const [poster, amount, deadline, winner, status, issueId] =
+      await bountyContract.getBounty(bountyId);
+
+    return {
+      poster,
+      amount: amount.toString(),
+      amountFormatted: ethers.formatEther(amount) + ' ABT',
+      deadline: Number(deadline),
+      winner,
+      status: Number(status),
+      statusLabel: BOUNTY_STATUS_LABELS[Number(status)] || 'Unknown',
+      issueId,
+    };
+  } catch (error: any) {
+    console.error(`Failed to get on-chain bounty ${bountyId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Check if an on-chain bounty is still active
+ */
+export async function isBountyActive(bountyId: number): Promise<boolean> {
+  if (!bountyContract) return false;
+
+  try {
+    return await bountyContract.isBountyActive(bountyId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get total ABT escrowed in the BountyPayment contract
+ */
+export async function getTotalEscrowed(): Promise<string> {
+  if (!bountyContract) return '0';
+
+  try {
+    const total = await bountyContract.totalEscrowed();
+    return ethers.formatEther(total);
+  } catch {
+    return '0';
+  }
+}
+
+/**
+ * Get blockchain configuration info (for /blockchain/config endpoint)
+ */
+export function getBlockchainConfig() {
+  return {
+    chain: 'base_sepolia',
+    chainId: 84532,
+    rpcUrl: BASE_SEPOLIA_RPC_URL,
+    abtContract: ABT_CONTRACT_ADDRESS || null,
+    bountyContract: BOUNTY_CONTRACT_ADDRESS || null,
+    treasury: TREASURY_ADDRESS,
+    requiredDeposit: ethers.formatEther(REQUIRED_DEPOSIT) + ' ABT',
+    blockchainEnabled: isBlockchainEnabled(),
+    bountyContractEnabled: isBountyContractEnabled(),
+  };
 }

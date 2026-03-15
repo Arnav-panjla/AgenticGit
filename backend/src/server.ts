@@ -1,5 +1,12 @@
 /**
- * AgentBranch API Server (v6)
+ * AgentBranch API Server (v7)
+ *
+ * Production integrations:
+ *   - Base Sepolia (chain 84532) for ABT token + BountyPayment contract
+ *   - x402 payment protocol for agent-to-agent micropayments
+ *   - BitGo SDK for enterprise wallet management
+ *   - ENS on-chain resolution
+ *   - Fileverse dDocs for decentralized storage (deferred)
  */
 
 import Fastify from 'fastify';
@@ -27,7 +34,11 @@ import { authPlugin } from './middleware/auth';
 // Service status imports
 import { isEmbeddingsEnabled } from './services/embeddings';
 import { isRealJudge } from './services/judge';
-import { isBlockchainEnabled } from './services/blockchain';
+import { isBlockchainEnabled, getBlockchainConfig } from './services/blockchain';
+
+// v7 service imports
+import { x402PaymentPlugin, x402Routes, registerDefaultPaymentRoutes, isX402Enabled, getX402Config } from './services/x402';
+import { isBitGoEnabled, getBitGoConfig } from './services/bitgo-wallet';
 
 const app = Fastify({ logger: true });
 
@@ -37,6 +48,11 @@ async function main() {
 
   // Auth plugin (extracts JWT from headers, sets req.user)
   await app.register(authPlugin);
+
+  // ─── x402 Payment Middleware (v7) ───────────────────────────────────────────
+  // Must be registered before routes so the onRequest hook fires first.
+  registerDefaultPaymentRoutes();
+  await app.register(x402PaymentPlugin);
 
   // ─── Public Routes ──────────────────────────────────────────────────────────
   
@@ -60,21 +76,29 @@ async function main() {
   // Blockchain routes
   await app.register(blockchainRoutes, { prefix: '/blockchain' });
 
+  // x402 payment routes (status, logs, stats)
+  await app.register(x402Routes, { prefix: '/x402' });
+
   // ─── Health & Status ────────────────────────────────────────────────────────
 
   app.get('/health', async () => ({
     status: 'ok',
-    version: '6.0.0',
+    version: '7.0.0',
     time: new Date().toISOString(),
   }));
 
   app.get('/status', async () => ({
-    version: '6.0.0',
+    version: '7.0.0',
     features: {
       embeddings: isEmbeddingsEnabled(),
       judge: isRealJudge() ? 'openai' : 'mock',
       blockchain: isBlockchainEnabled(),
+      x402: isX402Enabled(),
+      bitgo: isBitGoEnabled(),
     },
+    blockchain: getBlockchainConfig(),
+    x402: getX402Config(),
+    bitgo: getBitGoConfig(),
     environment: process.env.NODE_ENV || 'development',
   }));
 
@@ -85,7 +109,7 @@ async function main() {
 
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
-║                    AgentBranch API v6.0.0                     ║
+║                    AgentBranch API v7.0.0                     ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Server:     http://localhost:${port}                           ║
 ║  Health:     http://localhost:${port}/health                    ║
@@ -94,7 +118,9 @@ async function main() {
 ║  Features:                                                    ║
 ║    • Embeddings: ${isEmbeddingsEnabled() ? 'OpenAI (text-embedding-3-small)' : 'Disabled (no API key)'}
 ║    • Judge:      ${isRealJudge() ? 'OpenAI (gpt-4o)' : 'Mock (deterministic)'}
-║    • Blockchain: ${isBlockchainEnabled() ? 'Sepolia (live)' : 'Mock (demo mode)'}
+║    • Blockchain: ${isBlockchainEnabled() ? 'Base Sepolia (live)' : 'Mock (demo mode)'}
+║    • x402:       ${isX402Enabled() ? 'Active (micropayments)' : 'Disabled'}
+║    • BitGo:      ${isBitGoEnabled() ? 'Active (enterprise wallets)' : 'Mock (demo mode)'}
 ╚═══════════════════════════════════════════════════════════════╝
   `);
 }
